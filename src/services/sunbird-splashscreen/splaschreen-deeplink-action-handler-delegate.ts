@@ -63,7 +63,11 @@ import { FormAndFrameworkUtilService } from '../formandframeworkutil.service';
 import { FormConstants } from '../../app/form.constants';
 import {UpdateProfileService} from '../../services/update-profile-service';
 import {LoginNavigationHandlerService} from '../../services/login-navigation-handler.service';
-import { Platform } from '@ionic/angular';
+import { ModalController, Platform } from '@ionic/angular';
+import { TncUpdateHandlerService } from '../handlers/tnc-update-handler.service';
+import { ExternalIdVerificationService } from '../externalid-verification.service';
+
+
 
 @Injectable()
 export class SplaschreenDeeplinkActionHandlerDelegate implements SplashscreenActionHandlerDelegate {
@@ -76,6 +80,9 @@ export class SplaschreenDeeplinkActionHandlerDelegate implements SplashscreenAct
   private isChildContentFound;
   private enableRootNavigation = false;
   private _context: any;
+
+  profile: any = {};
+
 
   // should delay the deeplinks until tabs is loaded- gets triggered from Resource components
   set isDelegateReady(val: boolean) {
@@ -112,7 +119,12 @@ export class SplaschreenDeeplinkActionHandlerDelegate implements SplashscreenAct
     private contentPlayerHandler: ContentPlayerHandler,
     private formnFrameworkUtilService: FormAndFrameworkUtilService,
     private updateProfileService: UpdateProfileService,
-    private platform: Platform
+    private platform: Platform,
+    private tncUpdateHandlerService: TncUpdateHandlerService,
+    private modalCtrl: ModalController,
+    private externalIdVerificationService: ExternalIdVerificationService,
+    private consentService
+
   ) {
     this.eventToSetDefaultOnboardingData();
   }
@@ -125,11 +137,24 @@ export class SplaschreenDeeplinkActionHandlerDelegate implements SplashscreenAct
     return this._context;
   }
 
-  onAction(payload: any, context?): Observable<undefined> {
+  onAction(payload: any, context?, isCustom?): Observable<undefined> {
     if (context) {
       this.context = context;
     }
-    if (payload && payload.url) {
+    if (payload && payload.url && isCustom) {
+      try {
+        const uid = this.profile.userId; 
+        const result = this.profileService.deleteProfileData(uid).toPromise();
+  
+        if (result) {
+          console.log('Profile data deleted successfully');
+        } else {
+          console.log('Unable to delete profile data');
+        }
+      } catch (error) {
+        console.error('Error occurred while deleting profile data:', error);
+      }
+    } else if (payload && payload.url) {
       this.handleDeeplink(payload.url);
     } else if (payload && payload.action) {
       this.handleVendorAppAction(payload);

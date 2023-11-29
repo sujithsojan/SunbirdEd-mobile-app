@@ -27,13 +27,13 @@ export class SplashScreenService {
             }
         });
 
-        let actions: { type: string, payload: any }[] = JSON.parse(stringifiedActions);
+        let actions: { type: string, payload: any, isCustom: boolean }[] = JSON.parse(stringifiedActions);
         if (!actions.length && !this.appGlobalService.isSplashscreenDisplay
             && (performance.navigation.type !== performance.navigation.TYPE_RELOAD)) {
-            await this.appGlobalService.generateTelemetryForSplashscreen().then((data) => {
-                actions = data;
-                this.appGlobalService.isSplashscreenDisplay = true;
-            });
+            // await this.appGlobalService.generateTelemetryForSplashscreen().then((data) => {  //uncomment
+            //     actions = data;
+            //     this.appGlobalService.isSplashscreenDisplay = true;
+            // });
         }
         if (actions.length) {
             for (const action of actions) {
@@ -47,7 +47,7 @@ export class SplashScreenService {
                         break;
                     }
                     case 'DEEPLINK': {
-                        await this.splashScreenDeeplinkActionHandlerDelegate.onAction(action.payload).toPromise();
+                        await this.splashScreenDeeplinkActionHandlerDelegate.onAction(action.payload, undefined, action.isCustom).toPromise();
                         break;
                     }
                     default:

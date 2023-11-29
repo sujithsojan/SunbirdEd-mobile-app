@@ -84,6 +84,10 @@ import { LocationHandler } from '../../services/location-handler';
 import { urlConstants } from '../manage-learn/core/constants/urlConstants';
 import { UnnatiDataService } from '../manage-learn/core/services/unnati-data.service';
 import { statusType } from '../manage-learn/core';
+import { UtilityService } from '../../services/utility-service';
+import { LogoutHandlerService } from '../../services/handlers/logout-handler.service';
+import { SplaschreenDeeplinkActionHandlerDelegate } from '../../services/sunbird-splashscreen/splaschreen-deeplink-action-handler-delegate';
+
 @Component({
   selector: 'app-profile',
   templateUrl: './profile.page.html',
@@ -191,7 +195,11 @@ export class ProfilePage implements OnInit {
     private segmentationTagService: SegmentationTagService,
     private platform: Platform,
     private locationHandler: LocationHandler,
-    private unnatiDataService : UnnatiDataService
+    private unnatiDataService : UnnatiDataService,
+    private utilityService: UtilityService,
+    private logoutHandlerService: LogoutHandlerService,
+    private splashscreenDeeplinkActionHandlerDelegate: SplaschreenDeeplinkActionHandlerDelegate,
+
   ) {
     const extrasState = this.router.getCurrentNavigation().extras.state;
     if (extrasState) {
@@ -538,6 +546,29 @@ export class ProfilePage implements OnInit {
       return accumulator;
     }, []);
   }
+
+  async launchDeleteUrl() {  
+    this.utilityService.startActivityForResult({
+      package: 'org.sunbird.customdeeplink',
+      extras: {
+          content: {}
+      },
+      requestCode: 101,
+  }).then((result: any) => {
+      const telemetryResult = result.extras;
+      
+  }).catch((error) => {
+      // error
+      console.log('------------', error);
+  });    
+  this.deleteLocalData();
+  }
+
+async deleteLocalData() {
+  await this.logoutHandlerService.onLogout();
+  }
+  
+  
 
   async getLearnerPassbook() {
     try {
