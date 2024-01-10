@@ -1,6 +1,7 @@
-import { Events, PopoverController, Platform } from '@ionic/angular';
+import { PopoverController, Platform } from '@ionic/angular';
+import { Events } from '../../../../util/events';
 import { GroupGuideLinesPopoverComponent } from './group-guidelines-popup.component';
-import { CommonUtilService, UtilityService } from '@app/services';
+import { CommonUtilService, UtilityService } from '../../../../services';
 import { Location } from '@angular/common';
 
 describe('SbGenericPopoverComponent', () => {
@@ -37,7 +38,7 @@ describe('SbGenericPopoverComponent', () => {
         expect(groupGuideLinesPopoverComponent).toBeTruthy();
     });
 
-    it('should subscribe to back button and events subscription', (done) => {
+    it('should subscribe to back button and events subscription', () => {
         // arrange
         const subscribeWithPriorityData = jest.fn((_, fn) => fn());
         mockPlatform.backButton = {
@@ -56,11 +57,10 @@ describe('SbGenericPopoverComponent', () => {
         setTimeout(() => {
             expect(mockPopOverController.dismiss).toHaveBeenCalledWith({ isLeftButtonClicked: null });
             expect(unsubscribeFn).toHaveBeenCalled();
-            done();
         });
     });
 
-    it('should subscribe to back button and events subscription', (done) => {
+    it('should subscribe to back button and events subscription', () => {
         // arrange
         const subscribeWithPriorityData = jest.fn((_, fn) => fn());
         mockPlatform.backButton = {
@@ -79,7 +79,6 @@ describe('SbGenericPopoverComponent', () => {
         setTimeout(() => {
             expect(mockLocation.back).toHaveBeenCalled()
             expect(unsubscribeFn).toHaveBeenCalled();
-            done();
         });
     });
 
@@ -119,6 +118,17 @@ describe('SbGenericPopoverComponent', () => {
         groupGuideLinesPopoverComponent.continue();
         // assert
         expect(groupGuideLinesPopoverComponent.showGroupGuideLinesError).toBe(true);
+    });
+
+    it('openTermsOfUse', () => {
+        //arrange
+        mockUtilityService.getBuildConfigValue = jest.fn(() => Promise.resolve('TOU_BASE_URL'));
+        //act
+        groupGuideLinesPopoverComponent.openTermsOfUse();
+        //assert
+        setTimeout(() => {
+            expect(mockUtilityService.getBuildConfigValue).toHaveBeenCalledWith('TOU_BASE_URL');
+        }, 0);
     });
 
 });

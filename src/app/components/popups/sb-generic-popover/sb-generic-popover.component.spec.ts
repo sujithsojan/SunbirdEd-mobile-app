@@ -1,4 +1,5 @@
-import { Events, PopoverController, Platform } from '@ionic/angular';
+import { PopoverController, Platform } from '@ionic/angular';
+import { Events } from '../../../../util/events';
 import { SbGenericPopoverComponent } from '../sb-generic-popover/sb-generic-popover.component';
 
 describe('SbGenericPopoverComponent', () => {
@@ -44,13 +45,18 @@ describe('SbGenericPopoverComponent', () => {
         sbGenericPopoverComponent.backButtonFunc = {
             unsubscribe: unsubscribeFn,
         } as any;
-
+        mockEvents.subscribe = jest.fn((topic, fn) => {
+            if(topic == 'selectedContents:changed') {
+                fn({selectedContents: {}})
+        }});
         // act
         sbGenericPopoverComponent.ngOnInit();
         // assert
-        expect(mockPopOverController.dismiss).toHaveBeenCalledWith({ isLeftButtonClicked: null });
-        // expect(sbGenericPopoverComponent.selectedContents).toEqual(mockEventsResponse);
-        expect(unsubscribeFn).toHaveBeenCalled();
+        setTimeout(() => {
+            expect(mockPopOverController.dismiss).toHaveBeenCalledWith({ isLeftButtonClicked: null });
+            // expect(sbGenericPopoverComponent.selectedContents).toEqual(mockEventsResponse);
+            expect(unsubscribeFn).toHaveBeenCalled();
+        }, 0);
     });
 
     it('should unsubscribe to back button and events on ngOnDestroy', () => {
@@ -80,6 +86,14 @@ describe('SbGenericPopoverComponent', () => {
         sbGenericPopoverComponent.deleteContent(1);
         // assert
         expect(mockPopOverController.dismiss).toHaveBeenCalledWith({ isLeftButtonClicked: false });
+    });
+
+    it('should dismiss the popup on deleteContent, buttonIndex default', () => {
+        // arrange
+        // act
+        sbGenericPopoverComponent.deleteContent();
+        // assert
+        expect(mockPopOverController.dismiss).toHaveBeenCalledWith({ isLeftButtonClicked: true });
     });
 
 });

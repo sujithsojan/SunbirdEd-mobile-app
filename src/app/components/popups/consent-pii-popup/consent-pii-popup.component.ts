@@ -1,8 +1,10 @@
-import { Component } from '@angular/core';
+import {Component, Input} from '@angular/core';
 import { NavParams, PopoverController } from '@ionic/angular';
-import { CommonUtilService, AppGlobalService, UtilityService } from '@app/services';
+import { AppGlobalService } from '../../../../services/app-global-service.service';
+import { CommonUtilService } from '../../../../services/common-util.service';
+import { UtilityService } from '../../../../services/utility-service';
 import {FormAndFrameworkUtilService} from '../../../../services/formandframeworkutil.service';
-import { RouterLinks } from '@app/app/app.constant';
+import { RouterLinks } from '../../../../app/app.constant';
 
 @Component({
     selector: 'app-consent-pii-popup',
@@ -12,6 +14,7 @@ import { RouterLinks } from '@app/app/app.constant';
 
 
 export class ConsentPiiPopupComponent {
+    @Input() course;
     profile: any;
     consentForm = [];
     isAgreed = false;
@@ -37,20 +40,20 @@ export class ConsentPiiPopupComponent {
                 value: this.converDataSrcToObject(element)
             });
         });
-        this.commonUtilService.getAppName().then((res) => { this.appName = res; });
+        this.appName = await this.commonUtilService.getAppName();
     }
-    closePopover(data) {
+    async closePopover(data) {
         const request = {
             data,
             userId: this.profile.uid
         };
-        this.popOverCtrl.dismiss(request);
+        await this.popOverCtrl.dismiss(request);
     }
-    dontShare() {
-        this.closePopover(false);
+    async dontShare() {
+        await this.closePopover(false);
     }
-    share() {
-        this.closePopover(true);
+    async share() {
+        await this.closePopover(true);
     }
 
     converDataSrcToObject(ele) {
@@ -66,8 +69,20 @@ export class ConsentPiiPopupComponent {
                       (this.profile.serverProfile['maskedPhone'] ? this.profile.serverProfile['maskedPhone'] : '-');
                     }
                   } else {
-                    return this.profile.serverProfile[dataSrc.params.categoryCode] ?
-                    this.profile.serverProfile[dataSrc.params.categoryCode] : '-';
+                    if (ele.code === 'externalIds') {
+                        let externalId = '-';
+                        if (this.profile.serverProfile[dataSrc.params.categoryCode] ) {
+                            this.profile.serverProfile[dataSrc.params.categoryCode].forEach((externaleId) => {
+                              if (externaleId.provider === this.profile.serverProfile.channel) {
+                                externalId = externaleId.id;
+                              }
+                            });
+                          }
+                        return externalId;
+                    } else {
+                        return this.profile.serverProfile[dataSrc.params.categoryCode] ?
+                        this.profile.serverProfile[dataSrc.params.categoryCode] : '-';
+                    }
                   }
             case 'SERVER_PROFILE_LOCATIONS':
                 let location = '-';

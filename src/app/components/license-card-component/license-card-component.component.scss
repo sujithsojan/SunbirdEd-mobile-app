@@ -2,14 +2,13 @@
 @import "src/assets/styles/_variables.scss";
 
 .view-credits{
-  margin-bottom: 8px;
   margin-left: 0;
   span{
     color: $blue;
     ion-icon{
       padding: 0 0 4px 8px;
       vertical-align: middle;
-      font-size: 18px;
+      font-size: 1.5rem;
       margin-right: 2%;
       float: right;
     }
@@ -20,4 +19,24 @@
   p{
     margin-bottom: 16px;
   }
+  ion-card-title{
+    strong{
+      font-size: .75rem;
+    }
+  }
+}
+
+.label-margin-bottom {
+  margin-bottom: 3px !important;
+}
+
+.subtitle-color{
+  color: map-get($colors, granite_gray);
+}
+.font-12 {
+  font-size: 0.75rem !important;
+}
+.font-14-new{
+  font-size: 1rem !important;
+  margin-top: 8px;
 }

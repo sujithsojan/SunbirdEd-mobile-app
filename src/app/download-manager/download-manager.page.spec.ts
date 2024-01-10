@@ -15,13 +15,15 @@ import {
     CommonUtilService,
     FormAndFrameworkUtilService,
     TelemetryGeneratorService
-} from '@app/services';
-import { RouterLinks, EventTopics } from '@app/app/app.constant';
-import { Events, PopoverController } from '@ionic/angular';
+} from '../../services';
+import { RouterLinks, EventTopics } from '../../app/app.constant';
+import { PopoverController } from '@ionic/angular';
+import { Events } from '../../util/events';
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { Environment, InteractSubtype, PageId } from '../../services/telemetry-constants';
 import { featureIdMap } from '../feature-id-map';
+import { DbService, LocalStorageService, UtilsService } from '../manage-learn/core/services';
 
 describe('DownloadManagerPage', () => {
     let downloadManagerPage: DownloadManagerPage;
@@ -76,6 +78,12 @@ describe('DownloadManagerPage', () => {
     };
 
     const mockEvents: Partial<Events> = {
+        subscribe: jest.fn((topic, fn) => {
+            switch (topic) {
+                case EventTopics.LAST_ACCESS_ON:
+                    return fn(true);
+            }
+        }),
         publish: jest.fn(),
         unsubscribe: jest.fn()
     };
@@ -123,6 +131,18 @@ describe('DownloadManagerPage', () => {
         getSupportedContentFilterConfig: jest.fn(() => Promise.resolve(supportedPrimaryCategories))
     };
 
+    const mockDb: Partial<DbService> = {
+        
+    }
+    const mockStorage: Partial<LocalStorageService> = {
+        getLocalStorage: jest.fn(() => Promise.resolve([])),
+        setLocalStorage:jest.fn(() => Promise.resolve())
+    }
+    const mockUtils: Partial<UtilsService> = {
+        
+    }
+    
+
     beforeAll(() => {
         downloadManagerPage = new DownloadManagerPage(
             mockContentService as ContentService,
@@ -137,6 +157,9 @@ describe('DownloadManagerPage', () => {
             mockRouter as Router,
             mockTelemetryGeneratorService as TelemetryGeneratorService,
             mockFormAndFrameworkUtilService as FormAndFrameworkUtilService,
+            mockDb as DbService,
+            mockStorage as LocalStorageService,
+            mockUtils as UtilsService
         );
     });
 
@@ -174,6 +197,7 @@ describe('DownloadManagerPage', () => {
             it('should navigate to Active downloads page and generate INTERACT Telemetry', (done) => {
                 // arrange
                 mockAppHeaderService.headerEventEmitted$ = of({ name: 'download' });
+                mockTelemetryGeneratorService.generateExtraInfoTelemetry = jest.fn();
                 // act
                 downloadManagerPage.ionViewWillEnter().then(() => {
                     // assert
@@ -535,16 +559,18 @@ describe('DownloadManagerPage', () => {
         it('should unsubscribe all events', () => {
             // arrange
             mockContentService.deleteContent = jest.fn(() => of([{ status: 'CONTENT_DELETED' }] as any));
+            mockEvents.unSubscribe = jest.fn((topic, fn) => {
+                switch (topic) {
+                    case EventTopics.LAST_ACCESS_ON:
+                        return fn('some_page_id');
+                }
+            });
             // act
             downloadManagerPage.ionViewWillLeave();
-
             // assert
-            expect(mockEvents.unsubscribe).toHaveBeenCalledWith('update_header');
-            expect(mockEvents.unsubscribe).toHaveBeenCalledWith(EventTopics.HAMBURGER_MENU_CLICKED);
-
+            expect(mockEvents.unsubscribe).toHaveBeenNthCalledWith(1, 'update_header');
+            expect(mockEvents.unsubscribe).toHaveBeenNthCalledWith(2, EventTopics.HAMBURGER_MENU_CLICKED);
+            expect(mockEvents.unsubscribe).toHaveBeenNthCalledWith(3, EventTopics.LAST_ACCESS_ON);
         });
-
     });
-
-
 });

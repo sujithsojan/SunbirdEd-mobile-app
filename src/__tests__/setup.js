@@ -38,6 +38,7 @@ global.cordova = {
     },
     InAppBrowser: {
         open: () => ({
+            executeScript: () => { },
             addEventListener: () => { },
             close: () => { }
         })
@@ -71,7 +72,19 @@ global.splashscreen = {
     markImportDone: () => { },
     hide: () => { },
     clearPrefs: () => { },
-    setContent: () => { }
+    setContent: () => { },
+    getActions: (data) => {data(JSON.stringify([
+        {
+            type: 'TELEMETRY',
+            payload: 'sample-payload'
+        }, {
+            type: 'IMPORT',
+            payload: 'sample-payload'
+        }, {
+            type: 'DEEPLINK',
+            payload: 'payload'
+        }
+    ]))}
 }
 
 global.codePush = {
@@ -102,6 +115,11 @@ global.FCMPlugin = {
 global.sbsync = {
     onSyncSucces: () => {}
 }
+
+global.customtabs = {
+    launchInBrowser: (url, callbackUrl, error) => {}
+}
+
 
 global.qrScanner = {
     startScanner: (screenTitle, displayText, displayTextColor, buttonText, showButton, isRTL, callback) => {},

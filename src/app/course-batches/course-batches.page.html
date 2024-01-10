@@ -1,7 +1,7 @@
 <ion-header class="sb-header">
   <ion-toolbar class="sb-header-toolbar">
     <ion-buttons class="font-size-20  padding-left-6" (click)="goBack()" slot="start">
-      <ion-icon slot="start" name="arrow-back" class="batches-header-text"></ion-icon>
+      <ion-icon role="button" slot="start" name="arrow-back" aria-label="back" class="batches-header-text"></ion-icon>
     </ion-buttons>
     <ion-title class="batches-header-text font-size-20">
       <strong>{{'FRMELEMNTS_LBL_BATCHES_FOR_THIS_COURSE' | categoryKeyTranslate : course}}</strong>
@@ -12,12 +12,12 @@
 <ion-content class="ion-padding" overflow-scroll="true">
   <div *ngIf="ongoingBatches && ongoingBatches.length">
     <div class="background-gray">
-      <div class="width-100 batch-font" text-capitalize>
+      <div class="width-100 batch-font ion-text-capitalize">
         {{ 'VIEW_ONGOING_BATCHES' | translate }}
       </div>
     </div>
 
-    <div class="batch-list" padding-top>
+    <div class="batch-list ion-padding-top">
       <div *ngIf="ongoingBatches && ongoingBatches.length">
         <div class="flex-card-container" *ngFor="let batch of ongoingBatches">
           <div class="card-text">
@@ -53,11 +53,11 @@
 
   <div *ngIf="upcommingBatches && upcommingBatches.length">
     <div class="background-gray">
-      <div class="width-100 batch-font" text-capitalize>
+      <div class="width-100 batch-font ion-text-capitalize">
         {{ 'VIEW_UPCOMING_BATCHES' | translate }}
       </div>
     </div>
-    <div class="batch-list" padding-top>
+    <div class="batch-list ion-padding-top">
       <div *ngIf="upcommingBatches && upcommingBatches.length">
         <div class="flex-card-container" *ngFor="let batch of upcommingBatches">
           <div class="card-text">

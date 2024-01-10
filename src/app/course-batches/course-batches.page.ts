@@ -1,29 +1,29 @@
-import { PreferenceKey } from '@app/app/app.constant';
-import { LoginHandlerService } from './../../services/login-handler.service';
-import { TelemetryGeneratorService } from './../../services/telemetry-generator.service';
+import { Location } from '@angular/common';
 import { Component, Inject, NgZone, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
+import {PreferenceKey, RouterLinks, EventTopics} from '../../app/app.constant';
+import { CategoryKeyTranslator } from '../../pipes/category-key-translator/category-key-translator-pipe';
+import { AppGlobalService } from '../../services/app-global-service.service';
+import { ConsentPopoverActionsDelegate, LocalCourseService } from '../../services/local-course.service';
 import {
-  Batch, SharedPreferences,
-  Rollup, CorrelationData, TelemetryObject
-} from 'sunbird-sdk';
-import {
-  Events, Platform, PopoverController
+  Platform, PopoverController
 } from '@ionic/angular';
-import { EventTopics } from '../../app/app.constant';
+import { Events } from '../../util/events';
+import { Subscription } from 'rxjs';
+import {
+  Batch,
+  CorrelationData, Rollup, SharedPreferences,
+  TelemetryObject
+} from '@project-sunbird/sunbird-sdk';
+import { AppHeaderService } from '../../services/app-header.service';
 import { CommonUtilService } from '../../services/common-util.service';
 import {
-  InteractType, InteractSubtype,
-  Environment, PageId, ImpressionType
+  Environment, ImpressionType, InteractSubtype, InteractType,
+  PageId
 } from '../../services/telemetry-constants';
-import { AppHeaderService } from '../../services/app-header.service';
-import { Location } from '@angular/common';
-import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
-import { SbPopoverComponent } from '../components/popups';
-import { LocalCourseService, ConsentPopoverActionsDelegate } from '@app/services/local-course.service';
+import { SbPopoverComponent } from '../components/popups/sb-popover/sb-popover.component';
 import { EnrollCourse } from '../enrolled-course-details-page/course.interface';
-import { AppGlobalService } from '@app/services';
-import { CategoryKeyTranslator } from '@app/pipes/category-key-translator/category-key-translator-pipe';
+import { TelemetryGeneratorService } from './../../services/telemetry-generator.service';
 
 @Component({
   selector: 'app-course-batches',
@@ -55,7 +55,6 @@ export class CourseBatchesPage implements OnInit, ConsentPopoverActionsDelegate 
     @Inject('SHARED_PREFERENCES') private preferences: SharedPreferences,
     private appGlobalService: AppGlobalService,
     private popoverCtrl: PopoverController,
-    private loginHandlerService: LoginHandlerService,
     private zone: NgZone,
     private commonUtilService: CommonUtilService,
     private events: Events,
@@ -85,10 +84,6 @@ export class CourseBatchesPage implements OnInit, ConsentPopoverActionsDelegate 
     this.todayDate = window.dayjs().format('YYYY-MM-DD');
     this.userId = await this.appGlobalService.getActiveProfileUid();
     this.isGuestUser = !this.appGlobalService.isUserLoggedIn();
-
-    if (!this.isGuestUser) {
-      this.getBatchesByCourseId();
-    }
   }
 
   ionViewWillEnter() {
@@ -117,14 +112,6 @@ export class CourseBatchesPage implements OnInit, ConsentPopoverActionsDelegate 
     this.location.back();
   }
 
-  private getBatchesByCourseId(): void {
-    this.ongoingBatches = this.ongoingBatches;
-    this.upcommingBatches = this.upcommingBatches;
-    this.objRollup = this.objRollup;
-    this.corRelationList = this.corRelationList;
-    this.telemetryObject = this.telemetryObject;
-  }
-
   async enrollIntoBatch(batch: Batch) {
     if (!this.localCourseService.isEnrollable([batch], this.course)) {
       return false;
@@ -140,7 +127,7 @@ export class CourseBatchesPage implements OnInit, ConsentPopoverActionsDelegate 
     );
 
     if (this.isGuestUser) {
-      this.joinTraining(batch);
+      await this.joinTraining(batch);
     } else {
       this.loader = await this.commonUtilService.getLoader();
       await this.loader.present();
@@ -156,9 +143,9 @@ export class CourseBatchesPage implements OnInit, ConsentPopoverActionsDelegate 
         userConsent: this.course.userConsent
       };
 
-      this.localCourseService.enrollIntoBatch(enrollCourse, this).toPromise()
-        .then((data: boolean) => {
-          this.zone.run(async () => {
+      this.localCourseService.enrollIntoBatch(enrollCourse, this, this.course).toPromise()
+        .then(async (data: boolean) => {
+          await this.zone.run(async () => {
             this.commonUtilService.showToast(this.categoryKeyTranslator.transform('FRMELEMNTS_MSG_COURSE_ENROLLED', this.course));
             this.events.publish(EventTopics.ENROL_COURSE_SUCCESS, {
               batchId: batch.id,
@@ -191,7 +178,7 @@ export class CourseBatchesPage implements OnInit, ConsentPopoverActionsDelegate 
         actionsButtons: [
           {
             btntext: this.commonUtilService.translateMessage('OVERLAY_SIGN_IN'),
-            btnClass: 'popover-color'
+            btnClass: 'popover-color label-uppercase label-bold-font'
           },
         ]
       },
@@ -200,9 +187,15 @@ export class CourseBatchesPage implements OnInit, ConsentPopoverActionsDelegate 
     await confirm.present();
     const { data } = await confirm.onDidDismiss();
     if (data && data.canDelete) {
-      this.preferences.putString(PreferenceKey.BATCH_DETAIL_KEY, JSON.stringify(batchDetails)).toPromise();
-      this.preferences.putString(PreferenceKey.COURSE_DATA_KEY, JSON.stringify(this.course)).toPromise();
-      this.preferences.putString(PreferenceKey.CDATA_KEY, JSON.stringify(this.corRelationList)).toPromise();
+      if (data.btn) {
+        if (!this.commonUtilService.networkInfo.isNetworkAvailable && data.btn.isInternetNeededMessage) {
+          this.commonUtilService.showToast(data.btn.isInternetNeededMessage);
+          return false;
+        }
+      }
+      await this.preferences.putString(PreferenceKey.BATCH_DETAIL_KEY, JSON.stringify(batchDetails)).toPromise();
+      await this.preferences.putString(PreferenceKey.COURSE_DATA_KEY, JSON.stringify(this.course)).toPromise();
+      await this.preferences.putString(PreferenceKey.CDATA_KEY, JSON.stringify(this.corRelationList)).toPromise();
       this.telemetryGeneratorService.generateInteractTelemetry(InteractType.TOUCH,
         InteractSubtype.LOGIN_CLICKED,
         Environment.HOME,
@@ -211,13 +204,13 @@ export class CourseBatchesPage implements OnInit, ConsentPopoverActionsDelegate 
         undefined,
         this.objRollup,
         this.corRelationList);
-      this.loginHandlerService.signIn();
+      await this.router.navigate([RouterLinks.SIGN_IN], {state: {navigateToCourse: true}});
     }
   }
 
-  onConsentPopoverShow() {
+  async onConsentPopoverShow() {
     if (this.loader) {
-      this.loader.dismiss();
+      await this.loader.dismiss();
       this.loader = undefined;
     }
   }

@@ -1,7 +1,9 @@
 import {Component, Input, OnInit} from '@angular/core';
-import {ContentUtil} from '@app/util/content-util';
-import {ContentData, CorrelationData, LicenseDetails, Rollup, TelemetryObject} from 'sunbird-sdk';
-import {CommonUtilService, ID, InteractType, PageId, TelemetryGeneratorService} from '@app/services';
+import {ContentUtil} from '../../../util/content-util';
+import {ContentData, CorrelationData, LicenseDetails, Rollup, TelemetryObject} from '@project-sunbird/sunbird-sdk';
+import { ID, InteractType, PageId} from '../../../services/telemetry-constants';
+import { TelemetryGeneratorService } from '../../../services/telemetry-generator.service';
+import { CommonUtilService } from '../../../services/common-util.service';
 
 @Component({
     selector: 'app-license-card-component',
@@ -27,9 +29,11 @@ export class LicenseCardComponentComponent implements OnInit {
     }
 
     ngOnInit() {
-        this.objId = this.content.identifier;
-        this.objType = this.content.contentType;
-        this.objVer = this.content.pkgVersion;
+        if(this.content){
+            this.objId = this.content.identifier;
+            this.objType = this.content.contentType;
+            this.objVer = this.content.pkgVersion;
+        }
     }
 
     showLicensce() {

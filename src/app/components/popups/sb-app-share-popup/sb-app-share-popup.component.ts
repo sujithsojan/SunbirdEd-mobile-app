@@ -1,16 +1,15 @@
-import { AppVersion } from '@ionic-native/app-version/ngx';
-import { SocialSharing } from '@ionic-native/social-sharing/ngx';
-import { UtilityService } from '../../../../services/utility-service';
-import { CommonUtilService } from '@app/services/common-util.service';
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { Platform, PopoverController, NavParams } from '@ionic/angular';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { ShareItemType, ShareMode } from '../../../../app/app.constant';
+import { Environment, ID, ImpressionType, InteractSubtype, InteractType, PageId } from '../../../../services/telemetry-constants';
+import { AndroidPermission, AndroidPermissionsStatus } from '../../../../services/android-permissions/android-permission';
+import { CommonUtilService } from '../../../../services/common-util.service';
+import { TelemetryGeneratorService } from '../../../../services/telemetry-generator.service';
+import { AppVersion } from '@awesome-cordova-plugins/app-version/ngx';
+import { SocialSharing } from '@awesome-cordova-plugins/social-sharing/ngx';
+import { NavParams, Platform, PopoverController } from '@ionic/angular';
 import { Subscription } from 'rxjs';
-import { ImpressionType, PageId, Environment, ID, InteractType, InteractSubtype, AppGlobalService } from '@app/services';
-import { TelemetryGeneratorService } from '@app/services/telemetry-generator.service';
-import { ShareMode, ShareItemType } from '@app/app/app.constant';
 import { AndroidPermissionsService } from '../../../../services/android-permissions/android-permissions.service';
-import { Router } from '@angular/router';
-import { AndroidPermission, AndroidPermissionsStatus } from '@app/services/android-permissions/android-permission';
+import { UtilityService } from '../../../../services/utility-service';
 
 @Component({
   selector: 'app-sb-share-popup',
@@ -44,7 +43,7 @@ export class SbAppSharePopupComponent implements OnInit, OnDestroy {
   constructor(
     public popoverCtrl: PopoverController,
     private social: SocialSharing,
-    private platform: Platform,
+    public platform: Platform,
     private utilityService: UtilityService,
     private appVersion: AppVersion,
     private navParams: NavParams,
@@ -57,8 +56,8 @@ export class SbAppSharePopupComponent implements OnInit, OnDestroy {
   async ngOnInit() {
     this.generateShareClickTelemetry();
     this.generateImpressionTelemetry();
-    this.backButtonFunc = this.platform.backButton.subscribeWithPriority(11, () => {
-      this.popoverCtrl.dismiss();
+    this.backButtonFunc = this.platform.backButton.subscribeWithPriority(11, async () => {
+      await this.popoverCtrl.dismiss();
       this.backButtonFunc.unsubscribe();
     });
     this.shareType = this.shareOptions.link.value;
@@ -109,9 +108,9 @@ export class SbAppSharePopupComponent implements OnInit, OnDestroy {
     this.backButtonFunc.unsubscribe();
   }
 
-  closePopover() {
+  async closePopover() {
     this.generateInteractTelemetry(InteractType.TOUCH, InteractSubtype.CLOSE_CLICKED);
-    this.popoverCtrl.dismiss();
+    await this.popoverCtrl.dismiss();
   }
 
   async shareLink() {
@@ -119,41 +118,46 @@ export class SbAppSharePopupComponent implements OnInit, OnDestroy {
     this.generateInteractTelemetry(InteractType.TOUCH, InteractSubtype.SHARE_APP_INITIATED);
     const appName = await this.appVersion.getAppName();
     const url = this.commonUtilService.translateMessage('SHARE_APP_LINK', { app_name: appName, play_store_url: this.shareUrl });
-    this.social.share(null, null, null, url);
-    this.popoverCtrl.dismiss();
+    if(this.platform.is('ios')) {
+      await this.social.share(null, null, null, this.shareUrl);
+    } else {
+      await this.social.share(null, null, null, url);
+    }
+    
+    await this.popoverCtrl.dismiss();
     this.generateInteractTelemetry(InteractType.OTHER, InteractSubtype.SHARE_APP_SUCCESS);
   }
 
   async shareFile() {
-    await this.checkForPermissions().then((result) => {
+    await this.checkForPermissions().then(async (result) => {
       if (result) {
         this.generateConfirmClickTelemetry(ShareMode.SEND);
         this.generateInteractTelemetry(InteractType.TOUCH, InteractSubtype.SHARE_APP_INITIATED);
         const shareParams = {
           byFile: true,
         };
-        this.exportApk(shareParams);
-        this.popoverCtrl.dismiss();
+        await this.exportApk(shareParams);
+        await this.popoverCtrl.dismiss();
         this.generateInteractTelemetry(InteractType.OTHER, InteractSubtype.SHARE_APP_SUCCESS);
       } else {
-        this.commonUtilService.showSettingsPageToast('FILE_MANAGER_PERMISSION_DESCRIPTION', this.appName, this.pageId, true);
+        await this.commonUtilService.showSettingsPageToast('FILE_MANAGER_PERMISSION_DESCRIPTION', this.appName, this.pageId, true);
       }
     });
   }
 
   async saveFile() {
-    await this.checkForPermissions().then((result) => {
+    await this.checkForPermissions().then(async (result) => {
       if (result) {
         this.generateConfirmClickTelemetry(ShareMode.SAVE);
         this.generateInteractTelemetry(InteractType.TOUCH, InteractSubtype.SHARE_APP_INITIATED);
         const shareParams = {
           saveFile: true,
         };
-        this.exportApk(shareParams);
-        this.popoverCtrl.dismiss();
+        await this.exportApk(shareParams);
+        await this.popoverCtrl.dismiss();
         this.generateInteractTelemetry(InteractType.OTHER, InteractSubtype.SHARE_APP_SUCCESS);
       } else {
-        this.commonUtilService.showSettingsPageToast('FILE_MANAGER_PERMISSION_DESCRIPTION', this.appName, this.pageId, true);
+        await this.commonUtilService.showSettingsPageToast('FILE_MANAGER_PERMISSION_DESCRIPTION', this.appName, this.pageId, true);
       }
     });
   }
@@ -161,13 +165,14 @@ export class SbAppSharePopupComponent implements OnInit, OnDestroy {
   async exportApk(shareParams): Promise<void> {
     let destination = '';
     if (shareParams.saveFile) {
-      destination = cordova.file.externalRootDirectory + 'Download/';
+      const folderPath = this.platform.is('ios') ? cordova.file.documentsDirectory : cordova.file.externalRootDirectory 
+      destination = folderPath + 'Download/';
     }
     const loader = await this.commonUtilService.getLoader();
     await loader.present();
     this.utilityService.exportApk(destination).then(async (output) => {
       if (shareParams.byFile) {
-        this.social.share('', '', 'file://' + output, '');
+        await this.social.share('', '', 'file://' + output, '');
       } else {
         this.commonUtilService.showToast('FILE_SAVED', '', 'green-toast');
       }
@@ -178,9 +183,13 @@ export class SbAppSharePopupComponent implements OnInit, OnDestroy {
   }
 
   private async checkForPermissions(): Promise<boolean | undefined> {
+    if(this.platform.is('ios')) {
+      return new Promise<boolean | undefined>((resolve, reject) => {
+        resolve(true);
+      });
+    }
     return new Promise<boolean | undefined>(async (resolve, reject) => {
-      const permissionStatus = await this.commonUtilService.getGivenPermissionStatus(AndroidPermission.WRITE_EXTERNAL_STORAGE);
-
+      const permissionStatus = await this.commonUtilService.getGivenPermissionStatus(AndroidPermission.WRITE_EXTERNAL_STORAGE );
       if (permissionStatus.hasPermission) {
         resolve(true);
       } else if (permissionStatus.isPermissionAlwaysDenied) {
@@ -193,7 +202,7 @@ export class SbAppSharePopupComponent implements OnInit, OnDestroy {
           } else {
             resolve(false);
           }
-        });
+        }).catch(err => console.error(err));
       }
     });
   }

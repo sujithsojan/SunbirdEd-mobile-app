@@ -1,13 +1,15 @@
-import { Component, Inject } from '@angular/core';
+import {Component, Inject, Input} from '@angular/core';
 import { PopoverController } from '@ionic/angular';
-import { AppGlobalService, CommonUtilService, PageId } from '@app/services';
-import { PreferenceKey, ProfileConstants } from '@app/app/app.constant';
+import { AppGlobalService } from '../../../../services/app-global-service.service';
+import { PageId } from '../../../../services/telemetry-constants';
+import { CommonUtilService } from '../../../../services/common-util.service';
+import { PreferenceKey, ProfileConstants } from '../../../../app/app.constant';
 import {
   CachedItemRequestSourceFrom, ProfileService,
   ServerProfileDetailsRequest,
   SharedPreferences
 } from '@project-sunbird/sunbird-sdk';
-import { NavigationService } from '@app/services/navigation-handler.service';
+import { NavigationService } from '../../../../services/navigation-handler.service';
 
 @Component({
   selector: 'app-profile-name-confirmation-popover',
@@ -15,10 +17,12 @@ import { NavigationService } from '@app/services/navigation-handler.service';
   styleUrls: ['./sb-profile-name-confirmation-popup.component.scss'],
 })
 export class ProfileNameConfirmationPopoverComponent {
-
+  @Input() content;
+  @Input() projectContent;
   appName;
   profile;
   doNotShowAgain = false;
+  buttonLabel ="START_LEARNING";
 
   constructor(
     @Inject('PROFILE_SERVICE') private profileService: ProfileService,
@@ -30,7 +34,8 @@ export class ProfileNameConfirmationPopoverComponent {
   ) { }
 
   async ionViewWillEnter() {
-    this.commonUtilService.getAppName().then((res) => { this.appName = res; });
+    this.buttonLabel = this.projectContent ? "FRMELEMNTS_LBL_START_IMPROVEMENT" : "START_LEARNING";
+    this.appName = await this.commonUtilService.getAppName();
 
     const userId = await this.appGlobalService.getActiveProfileUid();
 
@@ -48,19 +53,20 @@ export class ProfileNameConfirmationPopoverComponent {
       });
   }
 
-  onSubmitClick() {
+  async onSubmitClick() {
     const key = PreferenceKey.DO_NOT_SHOW_PROFILE_NAME_CONFIRMATION_POPUP + '-' + this.profile.userId;
-    this.preferences.putBoolean(key, this.doNotShowAgain).toPromise().then();
-    this.closePopover({ buttonClicked: true });
+    await this.preferences.putBoolean(key, this.doNotShowAgain).toPromise().then();
+    await this.closePopover({ buttonClicked: true });
   }
 
-  closePopover(data?) {
-    this.popoverCtrl.dismiss(data);
+  async closePopover(data?) {
+    await this.popoverCtrl.dismiss(data);
   }
 
-  onProfilePageClick() {
-    this.navService.navigateToEditPersonalDetails(this.profile, PageId.PROFILE_NAME_CONFIRMATION_POPUP);
-    this.closePopover({ editProfileClicked: true });
+  async onProfilePageClick() {
+    let payload = this.projectContent ? {code:'name',children:[]} : ''
+    await this.navService.navigateToEditPersonalDetails(this.profile, PageId.PROFILE_NAME_CONFIRMATION_POPUP,payload);
+    await this.closePopover({ editProfileClicked: true });
   }
 
 }

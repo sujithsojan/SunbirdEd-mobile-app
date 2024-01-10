@@ -1,83 +1,96 @@
 // Angular dependencies
-import { NgModule, Provider, ErrorHandler, APP_INITIALIZER, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
-import { BrowserModule } from '@angular/platform-browser';
-import { RouteReuseStrategy } from '@angular/router';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { APP_INITIALIZER, CUSTOM_ELEMENTS_SCHEMA, ErrorHandler, NgModule, Provider } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-
 // ionic cordova dependencies/plugins
-import { WebView } from '@ionic-native/ionic-webview/ngx';
+import { SegmentationTagService } from '../services/segmentation-tag/segmentation-tag.service';
+import { AppVersion } from '@awesome-cordova-plugins/app-version/ngx';
+import { Device } from '@awesome-cordova-plugins/device/ngx';
+import { FileOpener } from '@awesome-cordova-plugins/file-opener/ngx';
+import { FileTransfer, FileTransferObject } from '@awesome-cordova-plugins/file-transfer/ngx';
+import { File } from '@awesome-cordova-plugins/file/ngx';
+import {GooglePlus} from '@awesome-cordova-plugins/google-plus/ngx';
+// ionic cordova dependencies/plugins
+import { WebView } from '@awesome-cordova-plugins/ionic-webview/ngx';
+import { LocalNotifications } from '@awesome-cordova-plugins/local-notifications/ngx';
+import { Network } from '@awesome-cordova-plugins/network/ngx';
+import { SocialSharing } from '@awesome-cordova-plugins/social-sharing/ngx';
+import { StatusBar } from '@awesome-cordova-plugins/status-bar/ngx';
 import { IonicModule, IonicRouteStrategy } from '@ionic/angular';
-import { StatusBar } from '@ionic-native/status-bar/ngx';
-import { AppVersion } from '@ionic-native/app-version/ngx';
-import { SocialSharing } from '@ionic-native/social-sharing/ngx';
-import { FileTransfer, FileTransferObject } from '@ionic-native/file-transfer/ngx';
-import { FileOpener } from '@ionic-native/file-opener/ngx';
-import { Device } from '@ionic-native/device/ngx';
-import { Network } from '@ionic-native/network/ngx';
-
 // 3rd party dependencies
-import { TranslateModule, TranslateLoader, TranslateService } from '@ngx-translate/core';
+import { TranslateLoader, TranslateModule, TranslateService } from '@ngx-translate/core';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
-
+import { CsContentType } from '@project-sunbird/client-services/services/content';
+import { QuestionCursor } from '@project-sunbird/sunbird-quml-player-v9';
 // app dependencies like directive, sdk, services etc
-import { SunbirdSdk } from 'sunbird-sdk';
+import { SunbirdSdk } from '@project-sunbird/sunbird-sdk';
+import { QumlPlayerService } from '../services/quml-player/quml-player.service';
 import { DirectivesModule } from '../directives/directives.module';
-import {
-  AppGlobalService,
-  CommonUtilService,
-  CourseUtilService,
-  TelemetryGeneratorService,
-  QRScannerResultHandler,
-  UtilityService,
-  AppHeaderService,
-  AppRatingService,
-  LogoutHandlerService,
-  LoginHandlerService,
-  ContainerService,
-  AndroidPermissionsService,
-  ComingSoonMessageService,
-  NotificationService,
-  SunbirdQRScanner,
-  ActivePageService,
-  FormAndFrameworkUtilService,
-  CanvasPlayerService,
-  SplashScreenService,
-  GroupHandlerService,
-  CollectionService,
-  ContentAggregatorHandler
-} from '../services/index';
-import { AppComponent } from './app.component';
+import { AppGlobalService } from '../services/app-global-service.service';
+import { FormAndFrameworkUtilService } from '../services/formandframeworkutil.service';
+import { CourseUtilService } from '../services/course-util.service';
+import { TelemetryGeneratorService } from '../services/telemetry-generator.service';
+import { QRScannerResultHandler } from '../services/qrscanresulthandler.service';
+import { SunbirdQRScanner } from '../services/sunbirdqrscanner.service';
+import { CommonUtilService } from '../services/common-util.service';
+import { LogoutHandlerService } from '../services/handlers/logout-handler.service';
+import { LoginHandlerService } from '../services/login-handler.service';
+import { ContainerService } from '../services/container.services';
+import { UtilityService } from '../services/utility-service';
+import { AppHeaderService } from '../services/app-header.service';
+import { AppRatingService } from '../services/app-rating.service';
+import { CollectionService } from '../services/collection.service';
+import { AndroidPermissionsService } from '../services/android-permissions/android-permissions.service';
+import { ComingSoonMessageService } from '../services/coming-soon-message.service';
+import { ActivePageService } from '../services/active-page/active-page-service';
+import { CanvasPlayerService } from '../services/canvas-player.service';
+import { SplashScreenService } from '../services/splash-screen.service';
+import { GroupHandlerService } from '../services/group/group-handler.service';
+import { ContentAggregatorHandler } from '../services/content/content-aggregator-handler.service';
+import { NotificationService } from '../services/notification.service';
 import { AppRoutingModule } from './app-routing.module';
-import { UserTypeSelectionPageModule } from './user-type-selection/user-type-selection.module';
+import { AppComponent } from './app.component';
 import { ComponentsModule } from './components/components.module';
-import { LocalNotifications } from '@ionic-native/local-notifications/ngx';
-import { PageFilterPageModule } from './page-filter/page-filter.module';
-import { PageFilterPage } from './page-filter/page-filter.page';
 import { PageFilterOptionsPageModule } from './page-filter/page-filter-options/page-filter-options.module';
-import { PageFilterOptionsPage } from './page-filter/page-filter-options/page-filter-options.page';
-import { CrashAnalyticsErrorLogger } from '@app/services/crash-analytics/crash-analytics-error-logger';
-import { File } from '@ionic-native/file/ngx';
+import { PageFilterPageModule } from './page-filter/page-filter.module';
 import { TermsAndConditionsPageModule } from './terms-and-conditions/terms-and-conditions.module';
-import { TncUpdateHandlerService } from '@app/services/handlers/tnc-update-handler.service';
+import { TncUpdateHandlerService } from '../services/handlers/tnc-update-handler.service';
 import {
   SplashcreenTelemetryActionHandlerDelegate
-} from '@app/services/sunbird-splashscreen/splashcreen-telemetry-action-handler-delegate';
-import { SplashscreenImportActionHandlerDelegate } from '@app/services/sunbird-splashscreen/splashscreen-import-action-handler-delegate';
-import { SplaschreenDeeplinkActionHandlerDelegate } from '@app/services/sunbird-splashscreen/splaschreen-deeplink-action-handler-delegate';
-import { LocalCourseService } from '@app/services/local-course.service';
-import { ExternalIdVerificationService } from '@app/services/externalid-verification.service';
-import { TextbookTocService } from '@app/app/collection-detail-etb/textbook-toc-service';
-import { NativePageTransitions } from '@ionic-native/native-page-transitions/ngx';
-import { NavigationService } from '@app/services/navigation-handler.service';
-import { CsPrimaryCategory, CsContentType } from '@project-sunbird/client-services/services/content';
+} from '../services/sunbird-splashscreen/splashcreen-telemetry-action-handler-delegate';
+import { SplashscreenImportActionHandlerDelegate } from '../services/sunbird-splashscreen/splashscreen-import-action-handler-delegate';
+import { SplaschreenDeeplinkActionHandlerDelegate } from '../services/sunbird-splashscreen/splaschreen-deeplink-action-handler-delegate';
+import { LocalCourseService } from '../services/local-course.service';
+import { ExternalIdVerificationService } from '../services/externalid-verification.service';
+import { TextbookTocService } from '../app/collection-detail-etb/textbook-toc-service';
+import { NativePageTransitions } from '@awesome-cordova-plugins/native-page-transitions/ngx';
+import { NavigationService } from '../services/navigation-handler.service';
 import {AliasBoardName} from '../pipes/alias-board-name/alias-board-name';
-import { DownloadPdfService } from '@app/services/download-pdf/download-pdf.service';
-import {ConsentService} from '@app/services/consent-service';
-import { ProfileHandler } from '@app/services/profile-handler';
-import {configuration} from '@app/configuration/configuration';
-import { LocationHandler } from '@app/services/location-handler';
-
+import { DownloadPdfService } from '../services/download-pdf/download-pdf.service';
+import {ConsentService} from '../services/consent-service';
+import { ProfileHandler } from '../services/profile-handler';
+import { IonicStorageModule } from '@ionic/storage';
+import { Camera } from '@awesome-cordova-plugins/camera/ngx';
+import { FilePath } from '@awesome-cordova-plugins/file-path/ngx';
+import { Chooser } from '@awesome-cordova-plugins/chooser/ngx';
+import { PhotoViewer } from '@awesome-cordova-plugins/photo-viewer/ngx';
+import { StreamingMedia } from '@awesome-cordova-plugins/streaming-media/ngx';
+import {configuration} from '../configuration/configuration';
+import { LocationHandler } from '../services/location-handler';
+import { CoreModule } from './manage-learn/core/core.module';
+import { DiscussionTelemetryService } from '../services/discussion/discussion-telemetry.service';
+import { UserTypeSelectionPageModule } from './user-type-selection/user-type-selection.module';
+import { RouteReuseStrategy } from '@angular/router';
+import { CrashAnalyticsErrorLogger } from '../services/crash-analytics/crash-analytics-error-logger';
+import { PrintPdfService } from '../services/print-pdf/print-pdf.service';
+import {UpdateProfileService} from '../services/update-profile-service';
+import { SbSearchFilterModule } from 'common-form-elements';
+import {LoginNavigationHandlerService} from '../services/login-navigation-handler.service';
+import { StoragePermissionHandlerService } from '../services/storage-permission/storage-permission-handler.service';
+import { TranslateJsonPipe } from '../pipes/translate-json/translate-json';
+import { OnboardingConfigurationService } from '../services/onboarding-configuration.service';
+import onboarding from './../assets/configurations/config.json';
 // AoT requires an exported function for factories
 export function translateHttpLoaderFactory(httpClient: HttpClient) {
   return new TranslateHttpLoader(httpClient, './assets/i18n/', '.json');
@@ -171,6 +184,22 @@ export function archiveService() {
 export const discussionService = () => {
   return SunbirdSdk.instance.discussionService;
 };
+export const segmentationService = () => {
+  return SunbirdSdk.instance.segmentationService;
+};
+
+export const debuggingService = () => {
+  return SunbirdSdk.instance.debuggingService;
+};
+
+export const notificationServiceV2 = () => {
+  return SunbirdSdk.instance.notificationServiceV2;
+};
+
+export const certificateService = () => {
+  return SunbirdSdk.instance.certificateService;
+};
+
 export function sdkDriverFactory(): any {
   return [{
     provide: 'SDK_CONFIG',
@@ -265,12 +294,22 @@ export function sdkDriverFactory(): any {
   }, {
     provide: 'ARCHIVE_SERVICE',
     useFactory: archiveService
-  },
-  {
+  }, {
     provide: 'DISCUSSION_SERVICE',
     useFactory: discussionService
-  }
-  ];
+  }, {
+    provide: 'SEGMENTATION_SERVICE',
+    useFactory: segmentationService
+  }, {
+    provide: 'DEBUGGING_SERVICE',
+    useFactory: debuggingService
+  },{
+    provide: 'NOTIFICATION_SERVICE_V2',
+    useFactory: notificationServiceV2
+  },{
+    provide: 'CERTIFICATE_SERVICE',
+    useFactory: certificateService
+  }];
 }
 
 export const sunbirdSdkServicesProvidersFactory: () => Provider[] = sdkDriverFactory;
@@ -324,9 +363,11 @@ export const sunbirdSdkFactory =
           apiPath: '/api/v3/device'
         },
         contentServiceConfig: {
-          apiPath: '/api/content/v1',
+          apiPath: '/api/content/v2',
           searchApiPath: '/api/content/v1',
-          contentHeirarchyAPIPath: '/api/course/v1'
+          contentHeirarchyAPIPath: '/api/collection/v1',
+          questionSetReadApiPath: '/api/questionset/v1',
+          questionReadApiPath: '/api/question/v1/'
         },
         courseServiceConfig: {
           apiPath: '/api/course/v1'
@@ -340,16 +381,16 @@ export const sunbirdSdkFactory =
           frameworkApiPath: '/api/framework/v1',
           frameworkConfigDirPath: '/data/framework',
           channelConfigDirPath: '/data/channel',
-          searchOrganizationApiPath: '/api/org/v1',
-          systemSettingsDefaultChannelIdKey: 'custodianOrgId'
+          searchOrganizationApiPath: '/api/org/v2',
+          systemSettingsDefaultChannelIdKey: 'custodianOrgId',
+          overriddenDefaultChannelId: onboarding.overriddenDefaultChannelId
         },
         profileServiceConfig: {
           profileApiPath: '/api/user/v1',
           profileApiPath_V2: '/api/user/v2',
-          profileApiPath_V3: '/api/user/v3',
-          profileApiPath_V4: '/api/user/v4',
+          profileApiPath_V5: '/api/user/v5',
           tenantApiPath: '/v1/tenant',
-          otpApiPath: '/api/otp/v1',
+          otpApiPath: '/api/otp/v2',
           searchLocationApiPath: '/api/data/v1',
           locationDirPath: '/data/location'
         },
@@ -357,7 +398,7 @@ export const sunbirdSdkFactory =
           apiPath: '/api/data/v1',
         },
         appConfig: {
-          maxCompatibilityLevel: 4,
+          maxCompatibilityLevel: 5,
           minCompatibilityLevel: 1
         },
         systemSettingsConfig: {
@@ -371,6 +412,11 @@ export const sunbirdSdkFactory =
           telemetryLogMinAllowedOffset: 86400000
         },
         sharedPreferencesConfig: {
+        },
+        certificateServiceConfig: {
+          apiPath: '/api/certreg/v2',
+          apiPathLegacy: '/api/certreg/v1',
+          rcApiPath: '/api/rc/${schemaName}/v1',
         },
         playerConfig: {
           showEndPage: false,
@@ -411,96 +457,114 @@ export const sunbirdSdkFactory =
 
 declare const sbutility;
 @NgModule({
-  declarations: [AppComponent],
-  entryComponents: [PageFilterPage, PageFilterOptionsPage],
-  imports: [
-    BrowserModule,
-    BrowserAnimationsModule,
-    AppRoutingModule,
-    ComponentsModule,
-    HttpClientModule,
-    TranslateModule.forRoot({
-      loader: {
-        provide: TranslateLoader,
-        useFactory: (translateHttpLoaderFactory),
-        deps: [HttpClient]
-      }
-    }),
-    IonicModule.forRoot({
-      scrollPadding: false,
-      scrollAssist: true,
-      // autoFocusAssist: false
-    }),
-    DirectivesModule,
-
-    // custom modules=
-    UserTypeSelectionPageModule,
-    PageFilterPageModule,
-    PageFilterOptionsPageModule,
-    TermsAndConditionsPageModule
-  ],
-  providers: [
-    StatusBar,
-    AppVersion,
-    LocalNotifications,
-    SocialSharing,
-    WebView,
-    File,
-    FileTransferObject,
-    FileOpener,
-    FileTransfer,
-    AppGlobalService,
-    CourseUtilService,
-    TelemetryGeneratorService,
-    QRScannerResultHandler,
-    SunbirdQRScanner,
-    CommonUtilService,
-    LogoutHandlerService,
-    LoginHandlerService,
-    TncUpdateHandlerService,
-    ContainerService,
-    UtilityService,
-    LocalCourseService,
-    AppHeaderService,
-    AppRatingService,
-    FormAndFrameworkUtilService,
-    DownloadPdfService,
-    CollectionService,
-    Device,
-    Network,
-    AndroidPermissionsService,
-    ComingSoonMessageService,
-    NotificationService,
-    ActivePageService,
-    CanvasPlayerService,
-    SplashcreenTelemetryActionHandlerDelegate,
-    SplashscreenImportActionHandlerDelegate,
-    SplaschreenDeeplinkActionHandlerDelegate,
-    SplashScreenService,
-    ExternalIdVerificationService,
-    TextbookTocService,
-    GroupHandlerService,
-    NativePageTransitions,
-    NavigationService,
-    ContentAggregatorHandler,
-    AliasBoardName,
-    ConsentService,
-    ProfileHandler,
-    LocationHandler,
-    { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
-    ...sunbirdSdkServicesProvidersFactory(),
-    { provide: ErrorHandler, useClass: CrashAnalyticsErrorLogger },
-    { provide: APP_INITIALIZER, useFactory: sunbirdSdkFactory, deps: [], multi: true }
-  ],
-  bootstrap: [AppComponent],
-  schemas: [
-    CUSTOM_ELEMENTS_SCHEMA
-  ]
+    declarations: [AppComponent],
+    imports: [
+        BrowserModule,
+        BrowserAnimationsModule,
+        AppRoutingModule,
+        ComponentsModule,
+        HttpClientModule,
+        TranslateModule.forRoot({
+            loader: {
+                provide: TranslateLoader,
+                useFactory: (translateHttpLoaderFactory),
+                deps: [HttpClient]
+            }
+        }),
+        IonicModule.forRoot({
+            scrollPadding: false,
+            scrollAssist: true,
+            // autoFocusAssist: false
+        }),
+        DirectivesModule,
+        // custom modules=
+        UserTypeSelectionPageModule,
+        PageFilterPageModule,
+        PageFilterOptionsPageModule,
+        TermsAndConditionsPageModule,
+        IonicStorageModule.forRoot(),
+        CoreModule,
+        SbSearchFilterModule.forRoot('mobile')
+    ],
+    providers: [
+        StatusBar,
+        AppVersion,
+        LocalNotifications,
+        SocialSharing,
+        WebView,
+        File,
+        FileTransferObject,
+        FileOpener,
+        FileTransfer,
+        AppGlobalService,
+        CourseUtilService,
+        TelemetryGeneratorService,
+        QRScannerResultHandler,
+        SunbirdQRScanner,
+        CommonUtilService,
+        LogoutHandlerService,
+        LoginHandlerService,
+        TncUpdateHandlerService,
+        ContainerService,
+        UtilityService,
+        LocalCourseService,
+        AppHeaderService,
+        AppRatingService,
+        FormAndFrameworkUtilService,
+        DownloadPdfService,
+        PrintPdfService,
+        CollectionService,
+        Device,
+        Network,
+        AndroidPermissionsService,
+        ComingSoonMessageService,
+        ActivePageService,
+        CanvasPlayerService,
+        SplashcreenTelemetryActionHandlerDelegate,
+        SplashscreenImportActionHandlerDelegate,
+        SplaschreenDeeplinkActionHandlerDelegate,
+        SplashScreenService,
+        ExternalIdVerificationService,
+        TextbookTocService,
+        GroupHandlerService,
+        NativePageTransitions,
+        NavigationService,
+        ContentAggregatorHandler,
+        AliasBoardName,
+        ConsentService,
+        ProfileHandler,
+        LocationHandler,
+        DiscussionTelemetryService,
+        UpdateProfileService,
+        SegmentationTagService,
+        LoginNavigationHandlerService,
+        GooglePlus,
+        StoragePermissionHandlerService,
+        OnboardingConfigurationService,
+        { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
+        ...sunbirdSdkServicesProvidersFactory(),
+        { provide: ErrorHandler, useClass: CrashAnalyticsErrorLogger },
+        { provide: APP_INITIALIZER, useFactory: sunbirdSdkFactory, deps: [], multi: true },
+        Camera,
+        FilePath,
+        Chooser,
+        PhotoViewer,
+        StreamingMedia,
+        { provide: QuestionCursor, useClass: QumlPlayerService },
+        { provide: 'SB_NOTIFICATION_SERVICE', useClass: NotificationService },
+        TranslateJsonPipe
+    ],
+    bootstrap: [AppComponent],
+    schemas: [
+        CUSTOM_ELEMENTS_SCHEMA
+    ]
 })
 export class AppModule {
   constructor(
     private translate: TranslateService) {
     this.setDefaultLanguage();
+    console.log('Onboarding Config', onboarding);
+    
   }
 
   private setDefaultLanguage() {

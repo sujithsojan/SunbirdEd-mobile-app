@@ -1,20 +1,13 @@
 import {
   Component,
-  NgZone,
-  ViewChild,
   EventEmitter,
-  Output,
   Input,
   OnChanges,
-  SimpleChanges,
-  OnInit
+  OnInit, Output,
+  SimpleChanges
 } from '@angular/core';
-import {
-  Events,
-  // Navbar,
-  ModalController
-} from '@ionic/angular';
-import { FileSizePipe } from '@app/pipes/file-size/file-size';
+import { FileSizePipe } from '../../../../pipes/file-size/file-size';
+import { Events } from '../../../../util/events';
 
 @Component({
   selector: 'app-sb-download-popup',
@@ -67,23 +60,19 @@ export class SbDownloadPopupComponent implements OnInit, OnChanges {
       this.queuedIdentifiers = typeof this.queuedIdentifiers === 'number' ? new Array(this.queuedIdentifiers) : this.queuedIdentifiers;
     }
     if (changes['currentCount']) {
-      this.currentCount = this.currentCount;
+      this.currentCount = changes['currentCount'].currentValue;
     }
     if (changes['downloadSize']) {
-      this.downloadSize = this.downloadSize;
+      this.downloadSize = changes['downloadSize'].currentValue;
     }
     if (changes['downloadProgress']) {
-      this.downloadProgress = this.downloadProgress;
-      if (this.downloadProgress === 100 && this.contentName && this.contentAvailableLocally) {
-        this.showDownload = false;
-      } else if (this.contentName && this.downloadProgress && this.contentAvailableLocally) {
-        this.showDownload = false;
-      } else if (this.contentName && this.contentAvailableLocally) {
+      this.downloadProgress = changes['downloadProgress'].currentValue;
+      if ((this.contentName && this.contentAvailableLocally) && (this.downloadProgress  || this.downloadProgress === 100)) {
         this.showDownload = false;
       }
     }
     if (changes['contentName']) {
-      this.contentName = this.contentName;
+      this.contentName = changes['contentName'];
     }
   }
 }

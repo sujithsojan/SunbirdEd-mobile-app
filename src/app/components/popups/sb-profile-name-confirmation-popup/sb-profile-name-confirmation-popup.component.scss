@@ -8,7 +8,7 @@ ion-content {
 }
 .pnc-profile-name {
     font-weight: bold;
-    font-size: 20px;
+    font-size: 1.25rem;
 }
 .pnc-checkbox {
     display: inline-block;
@@ -25,4 +25,10 @@ ion-footer {
     .sb-popover-footer {
         padding: 16px;
     }
+}
+.word-wrap-name{
+    word-break: break-all;
+    overflow-x: auto;
+    max-height: 8rem;
+    scroll-behavior: auto;
 }

@@ -1,6 +1,5 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-
 import { RouterLinks } from '../app.constant';
 import { CurriculumCoursesPage } from './curriculum-courses.page';
 
@@ -10,12 +9,8 @@ const routes: Routes = [
         component: CurriculumCoursesPage
     },
     {
-        path: RouterLinks.CURRICULUM_COURSE_DETAILS,
-        loadChildren: './curriculum-course-details/curriculum-course-details.module#CurriculumCourseDetailsPageModule'
-    },
-    {
         path: RouterLinks.CHAPTER_DETAILS,
-        loadChildren: './chapter-details/chapter-details.module#ChapterDetailsPageModule'
+        loadChildren: () => import('./chapter-details/chapter-details.module').then(m => m.ChapterDetailsPageModule)
     },
 ];
 

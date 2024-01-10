@@ -1,3 +1,4 @@
+/.angular/cache
 # Specifies intentionally untracked files to ignore when using Git
 # http://git-scm.com/docs/gitignore
 
@@ -37,11 +38,12 @@ UserInterfaceState.xcuserstate
 /buildConfig/gk.jks
 /buildConfig/secret.gradle
 /buildConfig/sunbird.properties
+/buildConfig/sunbird-ios.properties
 /buildConfig/secret.tar
 /buildConfig/data/
 /src/assets/data/
 
 google-services.json
-
+GoogleService-Info.plist
 #sonarcloud
 .scannerwork

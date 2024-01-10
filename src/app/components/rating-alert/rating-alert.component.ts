@@ -1,20 +1,21 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { NavParams, Platform, PopoverController } from '@ionic/angular';
-import { AppRatingService } from '@app/services/app-rating.service';
-import { TelemetryGeneratorService } from '@app/services/telemetry-generator.service';
-import { UtilityService } from '@app/services/utility-service';
-import { SharedPreferences, TelemetryService } from 'sunbird-sdk';
-import { AppVersion } from '@ionic-native/app-version/ngx';
+import { AppRatingService } from '../../../services/app-rating.service';
+import { TelemetryGeneratorService } from '../../../services/telemetry-generator.service';
+import { UtilityService } from '../../../services/utility-service';
+import { SharedPreferences, TelemetryService } from '@project-sunbird/sunbird-sdk';
+import { AppVersion } from '@awesome-cordova-plugins/app-version/ngx';
 import { Observable } from 'rxjs';
-import { PreferenceKey, StoreRating } from '@app/app/app.constant';
+import { PreferenceKey, StoreRating } from '../../../app/app.constant';
 import {
   Environment,
   ImpressionSubtype,
   ImpressionType,
   InteractSubtype,
   InteractType
-} from '@app/services/telemetry-constants';
+} from '../../../services/telemetry-constants';
 import { map } from 'rxjs/operators';
+import { CommonUtilService } from '../../../services/common-util.service';
 
 enum ViewType {
   APP_RATE = 'appRate',
@@ -63,18 +64,19 @@ export class AppRatingAlertComponent implements OnInit {
     private platform: Platform,
     private telemetryGeneratorService: TelemetryGeneratorService,
     private navParams: NavParams,
+    private commonUtilService: CommonUtilService,
   ) {
     this.getAppName();
     this.appLogo$ = this.preference.getString('app_logo').pipe(
       map((logo) => logo || './assets/imgs/ic_launcher.png')
     );
     this.currentViewText = this.appRateView[ViewType.APP_RATE];
-    this.backButtonFunc = this.platform.backButton.subscribeWithPriority(11, () => {
-      this.closePopover();
+    this.backButtonFunc = this.platform.backButton.subscribeWithPriority(11, async () => {
+      await this.closePopover();
     });
   }
 
-  ngOnInit() {
+  async ngOnInit() {
     this.pageId = this.navParams.get('pageId');
     this.telemetryGeneratorService.generateImpressionTelemetry(
       ImpressionType.VIEW,
@@ -82,18 +84,19 @@ export class AppRatingAlertComponent implements OnInit {
       this.pageId,
       Environment.HOME
     );
-    this.appRatePopup();
+    await this.appRatePopup();
   }
 
   getAppName() {
     this.appVersion.getAppName()
       .then((appName: any) => {
         this.appName = appName;
-      });
+      })
+      .catch(err => console.error(err));
   }
 
-  closePopover() {
-    this.popOverCtrl.dismiss(null);
+  async closePopover() {
+    await this.popOverCtrl.dismiss(null);
     if (this.backButtonFunc) {
       this.backButtonFunc.unsubscribe();
     }
@@ -109,23 +112,22 @@ export class AppRatingAlertComponent implements OnInit {
       undefined,
       { rateLaterCount: this.rateLaterClickedCount }
     );
-    this.closePopover();
+    await this.closePopover();
   }
 
-  rateOnStore() {
-    this.appVersion.getPackageName().then((pkg: any) => {
-      this.utilityService.openPlayStore(pkg);
-      this.appRatingService.setEndStoreRate(this.appRate);
-      this.telemetryGeneratorService.generateInteractTelemetry(
-        InteractType.TOUCH,
-        InteractSubtype.PLAY_STORE_BUTTON_CLICKED,
-        Environment.HOME,
-        this.pageId,
-        undefined,
-        { appRating: this.appRate }
-      );
-      this.popOverCtrl.dismiss(StoreRating.RETURN_CLOSE);
-    });
+  async rateOnStore() {
+    let pkg = await this.appVersion.getPackageName()
+    await this.utilityService.openPlayStore(pkg);
+    await this.appRatingService.setEndStoreRate(this.appRate);
+    this.telemetryGeneratorService.generateInteractTelemetry(
+      InteractType.TOUCH,
+      InteractSubtype.PLAY_STORE_BUTTON_CLICKED,
+      Environment.HOME,
+      this.pageId,
+      undefined,
+      { appRating: this.appRate }
+    );
+    await this.popOverCtrl.dismiss(StoreRating.RETURN_CLOSE);
   }
 
   submitRating() {
@@ -144,14 +146,14 @@ export class AppRatingAlertComponent implements OnInit {
     }
   }
 
-  goToHelpSection() {
+  async goToHelpSection() {
     this.telemetryGeneratorService.generateInteractTelemetry(
       InteractType.TOUCH,
       InteractSubtype.HELP_SECTION_CLICKED,
       Environment.HOME,
       this.pageId
     );
-    this.popOverCtrl.dismiss(StoreRating.RETURN_HELP);
+    await this.popOverCtrl.dismiss(StoreRating.RETURN_HELP);
   }
 
   private async appRatePopup() {
@@ -164,6 +166,7 @@ export class AppRatingAlertComponent implements OnInit {
       undefined,
       { appRatingPopAppearedCount: this.appRatingPopCount }
     );
+    this.rateContent(0);
   }
 
   async calculateAppRatingCountAppeared(value) {
@@ -180,6 +183,11 @@ export class AppRatingAlertComponent implements OnInit {
         return this.calculateAppRatingCountAppeared(1);
       }
     });
+  }
+
+  rateContent(ratingCount){
+    const ratingDomTag = document.getElementsByTagName('rating');
+    this.commonUtilService.setRatingStarAriaLabel(ratingDomTag, ratingCount);
   }
 
 }

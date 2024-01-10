@@ -1,44 +1,40 @@
+import { Location } from '@angular/common';
 import { Component, Inject, OnDestroy } from '@angular/core';
-import {
-  ProfileService,
-  SharedPreferences,
-  Profile,
-  DeviceRegisterRequest,
-  DeviceRegisterService,
-  DeviceInfo,
-  LocationSearchResult,
-  CorrelationData,
-  FormRequest,
-  AuditState
-} from 'sunbird-sdk';
-import { PreferenceKey, RouterLinks, LocationConfig, RegexPatterns, ProfileConstants } from '../../app/app.constant';
-import { AppHeaderService, CommonUtilService, AppGlobalService, FormAndFrameworkUtilService } from '@app/services';
+import { FormGroup } from '@angular/forms';
 import { NavigationExtras, Router } from '@angular/router';
-import { Events, IonSelect } from '@ionic/angular';
-import { concat, defer, of, Subscription } from 'rxjs';
-import { Platform } from '@ionic/angular';
-import { TelemetryGeneratorService } from '@app/services/telemetry-generator.service';
+import { featureIdMap } from '../../feature-id-map';
+import { AppGlobalService } from '../../services/app-global-service.service';
+import { FormAndFrameworkUtilService } from '../../services/formandframeworkutil.service';
+import { AppHeaderService } from '../../services/app-header.service';
+import { CommonUtilService } from '../../services/common-util.service';
+import { FormLocationFactory } from '../../services/form-location-factory/form-location-factory';
+import { LocationHandler } from '../../services/location-handler';
+import { ProfileHandler } from '../../services/profile-handler';
 import {
-  Environment,
-  ImpressionType,
+  AuditType, CorReleationDataType, Environment,
+  ID, ImpressionType,
   InteractSubtype,
   InteractType,
-  PageId,
-  ID,
-  CorReleationDataType,
-  AuditType
-} from '@app/services/telemetry-constants';
-import { featureIdMap } from '@app/feature-id-map';
-import { ExternalIdVerificationService } from '@app/services/externalid-verification.service';
-import { delay, distinctUntilChanged, filter, mergeMap, pairwise, take, tap } from 'rxjs/operators';
-import { FormLocationFactory } from '@app/services/form-location-factory/form-location-factory';
-import { FieldConfig } from 'common-form-elements';
-import { FormConstants } from '../form.constants';
-import { FormGroup } from '@angular/forms';
+  PageId
+} from '../../services/telemetry-constants';
+import { TelemetryGeneratorService } from '../../services/telemetry-generator.service';
+import { Platform } from '@ionic/angular';
+import { Events } from '../../util/events';
 import { Location as SbLocation } from '@project-sunbird/client-services/models/location';
-import { Location } from '@angular/common';
-import { LocationHandler } from '@app/services/location-handler';
-import { ProfileHandler } from '@app/services/profile-handler';
+import { FieldConfig } from 'common-form-elements';
+import { concat, defer, of, Subscription } from 'rxjs';
+import { delay, distinctUntilChanged, filter, mergeMap, pairwise, take, tap } from 'rxjs/operators';
+import {
+  AuditState, CorrelationData, DeviceInfo, DeviceRegisterRequest,
+  DeviceRegisterService,
+  FormRequest, LocationSearchResult, Profile, ProfileService,
+  SharedPreferences, ProfileType
+} from '@project-sunbird/sunbird-sdk';
+import { LocationConfig, PreferenceKey, ProfileConstants, RegexPatterns, RouterLinks } from '../../app/app.constant';
+import { FormConstants } from '../form.constants';
+import { TncUpdateHandlerService } from '../../services/handlers/tnc-update-handler.service';
+import { ExternalIdVerificationService } from '../../services/externalid-verification.service';
+
 @Component({
   selector: 'app-district-mapping',
   templateUrl: './district-mapping.page.html',
@@ -57,8 +53,11 @@ export class DistrictMappingPage implements OnDestroy {
   formGroup?: FormGroup;
   showNotNowFlag = false;
   locationFormConfig: FieldConfig<any>[] = [];
+  hideClearButton : boolean = false;
   profile?: Profile;
-  private name: string;
+  navigateToCourse = 0;
+  isGoogleSignIn = false;
+  userData: any;
   private backButtonFunc: Subscription;
   private presetLocation: { [locationType: string]: LocationSearchResult } = {};
   private loader?: any;
@@ -67,6 +66,7 @@ export class DistrictMappingPage implements OnDestroy {
   private formValueSubscription?: Subscription;
   private initialFormLoad = true;
   private isLocationUpdated = false;
+  params;
   constructor(
     @Inject('PROFILE_SERVICE') private profileService: ProfileService,
     @Inject('SHARED_PREFERENCES') private preferences: SharedPreferences,
@@ -83,9 +83,16 @@ export class DistrictMappingPage implements OnDestroy {
     public telemetryGeneratorService: TelemetryGeneratorService,
     private formLocationFactory: FormLocationFactory,
     private locationHandler: LocationHandler,
-    private profileHandler: ProfileHandler
+    private profileHandler: ProfileHandler,
+    private tncUpdateHandlerService: TncUpdateHandlerService,
+    private externalIdVerificationService: ExternalIdVerificationService
   ) {
     this.appGlobalService.closeSigninOnboardingLoader();
+    const extrasState = this.router.getCurrentNavigation().extras.state;
+    this.navigateToCourse = extrasState.noOfStepsToCourseToc;
+    this.isGoogleSignIn = extrasState.isGoogleSignIn;
+    this.userData = this.isGoogleSignIn ? extrasState.userData : '';
+    this.params = extrasState.payload;
   }
   goBack(isNavClicked: boolean) {
     this.telemetryGeneratorService.generateBackClickedNewTelemetry(
@@ -99,21 +106,23 @@ export class DistrictMappingPage implements OnDestroy {
   }
 
   async ionViewWillEnter() {
+    await this.initializeLoader();
     this.profile = await this.profileService.getActiveSessionProfile({ requiredFields: ProfileConstants.REQUIRED_FIELDS }).toPromise();
+    const isLoggedIn = this.appGlobalService.isUserLoggedIn();
     this.presetLocation = (await this.locationHandler.getAvailableLocation(
-      this.profile.serverProfile ? this.profile.serverProfile : this.profile))
+      this.profile.serverProfile ? this.profile.serverProfile : this.profile, isLoggedIn))
       .reduce<{ [code: string]: LocationSearchResult }>((acc, loc) => {
         if (loc) { acc[loc.type] = loc; }
         return acc;
       }, {});
     try {
-        this.initialiseFormData({
-          ...FormConstants.LOCATION_MAPPING,
-          subType: this.presetLocation['state'] ? this.presetLocation['state'].code : FormConstants.LOCATION_MAPPING.subType
-        });
-      } catch (e) {
-        this.initialiseFormData(FormConstants.LOCATION_MAPPING);
-      }
+      await this.initialiseFormData({
+        ...FormConstants.LOCATION_MAPPING,
+        subType: this.presetLocation['state'] ? this.presetLocation['state'].code : FormConstants.LOCATION_MAPPING.subType
+      });
+    } catch (e) {
+      await this.initialiseFormData(FormConstants.LOCATION_MAPPING);
+    }
     this.handleDeviceBackButton();
     this.checkLocationMandatory();
     this.telemetryGeneratorService.generateImpressionTelemetry(
@@ -127,13 +136,8 @@ export class DistrictMappingPage implements OnDestroy {
       PageId.DISTRICT_MAPPING,
       this.getEnvironment(), '', '', '', undefined,
       featureIdMap.location.LOCATION_CAPTURE);
-    this.headerService.hideHeader();
-    // await this.checkLocationAvailability();
+    await this.headerService.hideHeader();
     const correlationList: Array<CorrelationData> = [];
-    // if (this.stateName) {
-    //   correlationList.push({ id: this.stateName || '', type: CorReleationDataType.STATE });
-    //   correlationList.push({ id: this.districtName || '', type: CorReleationDataType.DISTRICT });
-    // }
     this.telemetryGeneratorService.generatePageLoadedTelemetry(
       PageId.LOCATION,
       this.getEnvironment(),
@@ -143,7 +147,6 @@ export class DistrictMappingPage implements OnDestroy {
       undefined,
       correlationList
     );
-    this.initializeLoader();
   }
 
   async initializeLoader() {
@@ -167,9 +170,9 @@ export class DistrictMappingPage implements OnDestroy {
   }
 
   async submit() {
-    this.saveDeviceLocation();
+    await this.saveDeviceLocation();
     const locationCodes = [];
-    (Object.keys(this.formGroup.value.children['persona']).map((acc, key) => {
+    for(const acc in this.formGroup.value.children['persona']) {
       if (this.formGroup.value.children['persona'][acc]) {
         const location: SbLocation = this.formGroup.value.children['persona'][acc] as SbLocation;
         if (location.type) {
@@ -179,9 +182,10 @@ export class DistrictMappingPage implements OnDestroy {
           });
         }
       }
-    }, {}));
-    const corReletionList: CorrelationData[] = locationCodes;
-    this.generateSubmitInteractEvent(corReletionList);
+    }
+
+    const corRelationList: CorrelationData[] =  locationCodes.map(r => ({ type: r.type, id: r.code || '' }));
+    this.generateSubmitInteractEvent(corRelationList);
     this.telemetryGeneratorService.generateInteractTelemetry(
       this.isLocationUpdated ? InteractType.LOCATION_CHANGED : InteractType.LOCATION_UNCHANGED,
       this.isStateorDistrictChanged(locationCodes),
@@ -199,47 +203,105 @@ export class DistrictMappingPage implements OnDestroy {
         return;
       }
       const name = this.formGroup.value['name'].replace(RegexPatterns.SPECIALCHARECTERSANDEMOJIS, '').trim();
-      const req = {
-        userId: this.appGlobalService.getCurrentUser().uid || this.profile.uid,
-        locationCodes,
-        ...((name ? { firstName: name } : {})),
-        lastName: '',
-        ...((this.formGroup.value['persona'] ? { userType: this.formGroup.value['persona'] } : {})),
-        ...((this.formGroup.value.children['persona']['subPersona'] ?
-          { userSubType: this.formGroup.value.children['persona']['subPersona'] } : {}))
-      };
-      const loader = await this.commonUtilService.getLoader();
-      await loader.present();
-      this.profileService.updateServerProfile(req).toPromise()
-        .then(async () => {
-          await loader.dismiss();
-          this.preferences.putString(PreferenceKey.SELECTED_USER_TYPE, this.formGroup.value.persona).toPromise().then();
-          if (!(await this.commonUtilService.isDeviceLocationAvailable())) { // adding the device loc if not available
-            await this.saveDeviceLocation();
-          }
-          this.isLocationUpdated = false;
-          this.generateLocationCaptured(false);
-          this.commonUtilService.showToast('PROFILE_UPDATE_SUCCESS');
-          this.events.publish('loggedInProfile:update', req);
-          if (this.profile && (this.source === PageId.PROFILE ||
-            this.source === PageId.GUEST_PROFILE || this.source === PageId.PROFILE_NAME_CONFIRMATION_POPUP)) {
-            this.location.back();
-          } else {
-            if (this.appGlobalService.isJoinTraningOnboardingFlow) {
-              window.history.go(-2);
-            } else {
-              this.router.navigate([`/${RouterLinks.TABS}`]);
+      const userTypes = [];
+      if (this.formGroup.value['persona'] && this.formGroup.value.children['persona'] && this.formGroup.value.children['persona']['subPersona'] && this.formGroup.value.children['persona']['subPersona'].length) {
+        if (typeof this.formGroup.value.children['persona']['subPersona'] === 'string') {
+          userTypes.push({
+            type: this.formGroup.value['persona'],
+            subType: this.formGroup.value.children['persona']['subPersona'] || undefined
+          });
+        }
+        else if (Array.isArray(this.formGroup.value.children['persona']['subPersona'])) {
+          for (let i = 0; i < this.formGroup.value.children['persona']['subPersona'].length; i++) {
+            if(this.formGroup.value.children['persona']['subPersona'][i]){
+              userTypes.push({
+                "type": this.formGroup.value['persona'],
+                "subType": this.formGroup.value.children['persona']['subPersona'][i]
+              })
             }
           }
-        }).catch(async () => {
-          await loader.dismiss();
-          this.commonUtilService.showToast('PROFILE_UPDATE_FAILED');
-          if (this.profile) {
-            this.location.back();
-          } else {
-            this.router.navigate([`/${RouterLinks.TABS}`]);
-          }
+        }
+      }
+      else{
+        userTypes.push({
+          "type" : this.formGroup.value['persona']
         });
+      }
+      const req = {
+        userId: this.appGlobalService.getCurrentUser().uid || this.profile.uid,
+        profileLocation: locationCodes,
+        ...(name ? { firstName: name } : {}),
+        lastName: '',
+        profileUserTypes: userTypes
+      };
+      if (this.isGoogleSignIn && this.userData.isMinor) {
+          const navigationExtras: NavigationExtras = {
+            state: {
+              userData: {...this.userData,
+                location: this.formGroup.value.children['persona'],
+                profileUserTypes: userTypes,
+                userId: this.appGlobalService.getCurrentUser().uid || this.profile.uid}
+            }
+          };
+          await this.router.navigate([RouterLinks.SIGNUP_EMAIL], navigationExtras);
+      } else {
+        if (this.isGoogleSignIn) {
+          req['firstName'] = this.userData.name;
+          req['dob'] = this.userData.dob;
+        }
+        const loader = await this.commonUtilService.getLoader();
+        await loader.present();
+        const isSSOUser = await this.tncUpdateHandlerService.isSSOUser(this.profile);
+        this.profileService.updateServerProfile(req).toPromise()
+          .then(async () => {
+            await loader.dismiss();
+            await this.preferences.putString(PreferenceKey.SELECTED_USER_TYPE, this.formGroup.value.persona).toPromise().then();
+            if (!(await this.commonUtilService.isDeviceLocationAvailable())) { // adding the device loc if not available
+              await this.saveDeviceLocation();
+            }
+            this.isLocationUpdated = false;
+            this.generateLocationCaptured(false);
+            this.commonUtilService.showToast('PROFILE_UPDATE_SUCCESS');
+            this.events.publish('loggedInProfile:update', req);
+            if (this.isGoogleSignIn) {
+              const categoriesProfileData = {
+                hasFilledLocation: true,
+                showOnlyMandatoryFields: true,
+              };
+              await this.router.navigate([`/${RouterLinks.PROFILE}/${RouterLinks.CATEGORIES_EDIT}`], {
+                state: categoriesProfileData
+              });
+            } else if (this.profile && (this.source === PageId.GUEST_PROFILE || this.source === PageId.PROFILE_NAME_CONFIRMATION_POPUP)) {
+                this.location.back();
+            } else if (this.profile && this.source === PageId.PROFILE) {
+                this.location.back();
+              //  this.events.publish('UPDATE_TABS', {type: 'SWITCH_TABS_USERTYPE'});
+            } else {
+              if (this.profile && !isSSOUser) {
+                await this.appGlobalService.showYearOfBirthPopup(this.profile.serverProfile);
+              }
+              if (this.appGlobalService.isJoinTraningOnboardingFlow) {
+                window.history.go(-this.navigateToCourse);
+                await this.externalIdVerificationService.showExternalIdVerificationPopup();
+              } else {
+                this.events.publish('UPDATE_TABS', {type: 'SWITCH_TABS_USERTYPE'});
+                this.events.publish('update_header');
+              }
+            }
+          }).catch(async () => {
+            await loader.dismiss();
+            this.commonUtilService.showToast('PROFILE_UPDATE_FAILED');
+            if (this.profile) {
+              this.location.back();
+            } else {
+              if (this.profile && !isSSOUser) {
+                await this.appGlobalService.showYearOfBirthPopup(this.profile.serverProfile);
+              }
+              await this.router.navigate([`/${RouterLinks.TABS}`]);
+              this.events.publish('update_header');
+            }
+          });
+      }
     } else if (this.source === PageId.GUEST_PROFILE) { // block for editing the device location
       this.generateLocationCaptured(true); // is dirtrict or location edit  = true
       await this.saveDeviceLocation();
@@ -247,7 +309,7 @@ export class DistrictMappingPage implements OnDestroy {
       this.location.back();
     } else { // add or update the device loc
       await this.saveDeviceLocation();
-      this.appGlobalService.setOnBoardingCompleted();
+      await this.appGlobalService.setOnBoardingCompleted();
       const navigationExtras: NavigationExtras = {
         state: {
           loginMode: 'guest'
@@ -261,9 +323,10 @@ export class DistrictMappingPage implements OnDestroy {
         undefined,
         undefined,
         undefined,
-        corReletionList
+        corRelationList
       );
-      this.router.navigate([`/${RouterLinks.TABS}`], navigationExtras);
+      await this.router.navigate([`/${RouterLinks.TABS}`], navigationExtras);
+      this.events.publish('update_header');
     }
   }
 
@@ -282,8 +345,11 @@ export class DistrictMappingPage implements OnDestroy {
         declaredOffline: !this.commonUtilService.networkInfo.isNetworkAvailable
       }
     } as any;
-    this.deviceRegisterService.registerDevice(req).toPromise();
-    this.preferences.putString(PreferenceKey.DEVICE_LOCATION, JSON.stringify(req.userDeclaredLocation)).toPromise();
+    await this.deviceRegisterService.registerDevice(req).toPromise();
+    if (this.appGlobalService.isGuestUser) {
+      await this.preferences.putString(PreferenceKey.GUEST_USER_LOCATION, JSON.stringify(req.userDeclaredLocation)).toPromise();
+    }
+    await this.preferences.putString(PreferenceKey.DEVICE_LOCATION, JSON.stringify(req.userDeclaredLocation)).toPromise();
     this.commonUtilService.handleToTopicBasedNotification();
     await loader.dismiss();
   }
@@ -310,8 +376,9 @@ export class DistrictMappingPage implements OnDestroy {
     }
   }
 
-  private skipLocation() {
-    this.router.navigate([`/${RouterLinks.TABS}`]);
+  async skipLocation() {
+    await this.router.navigate([`/${RouterLinks.TABS}`]);
+    this.events.publish('update_header');
   }
 
   private getEnvironment(): string {
@@ -342,19 +409,28 @@ export class DistrictMappingPage implements OnDestroy {
     } catch (e) {
       locationMappingConfig = await this.formAndFrameworkUtilService.getFormFields(FormConstants.LOCATION_MAPPING);
     }
-    const selectedUserType = await this.preferences.getString(PreferenceKey.SELECTED_USER_TYPE).toPromise();
+    let selectedUserType = await this.preferences.getString(PreferenceKey.SELECTED_USER_TYPE).toPromise();
     const useCaseList =
       this.appGlobalService.isUserLoggedIn() ? ['SIGNEDIN_GUEST', 'SIGNEDIN'] : ['SIGNEDIN_GUEST', 'GUEST'];
     for (const config of locationMappingConfig) {
-      if (config.code === 'name' && (this.source === PageId.PROFILE || this.source === PageId.PROFILE_NAME_CONFIRMATION_POPUP)) {
+      if (config.code === 'name' && (this.source === PageId.PROFILE || this.source === PageId.PROFILE_NAME_CONFIRMATION_POPUP)
+      && !this.isGoogleSignIn) {
         config.templateOptions.hidden = false;
-        config.default = (this.profile && this.profile.serverProfile) ? this.profile.serverProfile.firstName : this.profile.handle;
+        config.default = (this.profile && this.profile.serverProfile && this.profile.serverProfile.firstName) ?
+        this.profile.serverProfile.firstName : this.profile.handle;
       } else if (config.code === 'name' && this.source !== PageId.PROFILE) {
         config.validations = [];
       }
       if (config.code === 'persona') {
-        config.default = (this.profile && this.profile.profileType) ?
-        this.profile.profileType : ((this.profile && this.profile.serverProfile) ? this.profile.serverProfile.userType : selectedUserType);
+        if (this.isGoogleSignIn && selectedUserType === ProfileType.NONE) {
+          const guestUser = await this.commonUtilService.getGuestUserConfig();
+          selectedUserType = (this.profile.serverProfile && !this.profile.serverProfile.profileUserType.type) ?
+            guestUser.profileType : selectedUserType;
+        }
+        config.default = (this.profile && this.profile.serverProfile
+        && this.profile.serverProfile.profileUserType.type
+        && (this.profile.serverProfile.profileUserType.type !== ProfileType.OTHER.toUpperCase())) ?
+        this.profile.serverProfile.profileUserType.type : selectedUserType;
         if (this.source === PageId.PROFILE) {
           config.templateOptions.hidden = false;
         }
@@ -364,13 +440,16 @@ export class DistrictMappingPage implements OnDestroy {
 
       if (config.templateOptions['dataSrc'] && config.templateOptions['dataSrc']['marker'] === 'SUPPORTED_PERSONA_LIST') {
         config.templateOptions.options = (await this.profileHandler.getSupportedUserTypes())
+          .filter(userType => {
+            return userType.isActive;
+          })
           .map(p => ({
             label: p.name,
             value: p.code
           }));
         Object.keys(config.children).forEach((persona) => {
           config.children[persona].map((personaConfig) => {
-            if (!useCaseList.includes(personaConfig.templateOptions['dataSrc']['params']['useCase'])) {
+            if (!useCaseList.includes(personaConfig.templateOptions['dataSrc']['params']['useCase']) && !this.isGoogleSignIn) {
               personaConfig.templateOptions['hidden'] = true;
               personaConfig.validations = [];
             }
@@ -381,7 +460,27 @@ export class DistrictMappingPage implements OnDestroy {
             switch (personaConfig.templateOptions['dataSrc']['marker']) {
               case 'SUBPERSONA_LIST': {
                 if (this.profile.serverProfile) {
-                  personaConfig.default = this.profile.serverProfile.userSubType;
+                  if(personaConfig.templateOptions.multiple){
+                    const subPersonaCodes = [];
+                    if(!this.profile.serverProfile.profileUserTypes && !this.profile.serverProfile.profileUserTypes.length && this.profile.serverProfile.profileUserType) {
+                      if(typeof this.profile.serverProfile.profileUserType === 'string'){
+                        subPersonaCodes.push(this.profile.serverProfile.profileUserType);
+                      } else if(this.profile.serverProfile.profileUserType.subType){
+                        subPersonaCodes.push(this.profile.serverProfile.profileUserType.subType);
+                      }
+                    }
+                    else if(this.profile.serverProfile.profileUserTypes && this.profile.serverProfile.profileUserTypes.length){
+                      for( let i =0; i< this.profile.serverProfile.profileUserTypes.length; i++){
+                        if(this.profile.serverProfile.profileUserTypes[i].subType){
+                          subPersonaCodes.push(this.profile.serverProfile.profileUserTypes[i].subType);
+                        }
+                      }
+                    }
+                    personaConfig.default = subPersonaCodes;
+                  }
+                  else if(this.profile.serverProfile.profileUserType && this.profile.serverProfile.profileUserType.subType){
+                    personaConfig.default = this.profile.serverProfile.profileUserType.subType;
+                  }
                 }
                 break;
               }
@@ -407,8 +506,12 @@ export class DistrictMappingPage implements OnDestroy {
     }
     this.initialFormLoad = false;
     this.locationFormConfig = locationMappingConfig;
+    this.hideClearButton = false;
+     if(this.params){
+    this.fieldConfig();
   }
-
+  }
+ 
   private setDefaultConfig(fieldConfig: FieldConfig<any>): SbLocation {
     if (this.presetLocation[fieldConfig.code]) {
       return this.presetLocation[fieldConfig.code];
@@ -447,7 +550,7 @@ export class DistrictMappingPage implements OnDestroy {
       await this.loader.dismiss();
       const subPersonaFormControl = this.formGroup.get('children.persona.subPersona');
       if (subPersonaFormControl && !subPersonaFormControl.value) {
-        subPersonaFormControl.patchValue(this.profile.serverProfile.userSubType || null);
+        subPersonaFormControl.patchValue(this.profile.serverProfile.profileUserType.subType || null);
       }
       if (!this.stateChangeSubscription) {
         this.stateChangeSubscription = concat(
@@ -467,13 +570,14 @@ export class DistrictMappingPage implements OnDestroy {
           this.locationFormConfig = undefined;
           this.stateChangeSubscription = undefined;
           this.loader.present();
+          this.formGroup.value.children.persona.subPersona = [];
           this.prevFormValue = { ...this.formGroup.value };
           this.initialiseFormData({
             ...FormConstants.LOCATION_MAPPING,
             subType: (newStateValue as SbLocation).code,
-          }).catch((e) => {
+          }).catch(async (e) => {
             console.error(e);
-            this.initialiseFormData(FormConstants.LOCATION_MAPPING);
+            await this.initialiseFormData(FormConstants.LOCATION_MAPPING);
           });
         });
       }
@@ -535,6 +639,18 @@ export class DistrictMappingPage implements OnDestroy {
   }
 
   isChangedLocation(prev, curr) {
+    if(prev.persona!= curr.persona){
+      this.telemetryGeneratorService.generateInteractTelemetry(
+        InteractType.ROLE_CHANGED, '',
+        this.getEnvironment(),
+        PageId.LOCATION,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        curr.persona
+      );
+    }
     let newLocation;
     Object.keys(curr['children']['persona']).forEach((key) => {
       if (curr['children']['persona'][key] && (!prev['children']['persona'][key] ||
@@ -565,9 +681,11 @@ export class DistrictMappingPage implements OnDestroy {
   isStateorDistrictChanged(locationCodes) {
     let changeStatus;
     locationCodes.forEach((d) => {
-      if (!changeStatus && d.type === 'state' && (d.code !== this.presetLocation['state'].code)) {
+      if (!changeStatus && d.type === 'state' && this.presetLocation['state']
+      && (d.code !== this.presetLocation['state'].code)) {
         changeStatus = InteractSubtype.STATE_DIST_CHANGED;
-      } else if (!changeStatus && d.type === 'district' && (d.code !== this.presetLocation['district'].code)) {
+      } else if (!changeStatus && d.type === 'district' && this.presetLocation['district']
+      && (d.code !== this.presetLocation['district'].code)) {
         changeStatus = InteractSubtype.DIST_CHANGED;
       }
     });
@@ -587,4 +705,25 @@ export class DistrictMappingPage implements OnDestroy {
       featureIdMap.location.LOCATION_CAPTURE);
   }
 
+  async redirectToLogin() {
+    await this.router.navigate([RouterLinks.SIGN_IN]);
+  }
+  fieldConfig(){
+    this.locationFormConfig.forEach(element => {
+      if(element.code  != this.params.code){
+        element.templateOptions.hidden = true;
+        element.templateOptions.disabled = true;
+        if( this.params.children){
+          let keys = Object.keys(element.children);
+          keys.forEach(key => {
+            element.children[key].forEach(childEl => {
+              childEl.templateOptions.hidden =true;
+              childEl.templateOptions.disabled =true;
+              this.hideClearButton = true;
+             });
+          });
+        }
+      }
+    });
+  }
 }

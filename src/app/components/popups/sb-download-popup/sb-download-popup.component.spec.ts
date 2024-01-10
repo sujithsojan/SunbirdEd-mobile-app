@@ -1,5 +1,5 @@
 import { SbDownloadPopupComponent } from './sb-download-popup.component';
-import { Events } from '@ionic/angular';
+import { Events } from '../../../../util/events';
 import { FileSizePipe } from '../../../../pipes/file-size/file-size';
 import { SimpleChanges, SimpleChange } from '@angular/core';
 
@@ -42,7 +42,7 @@ describe('SbDownloadPopupComponent', () => {
 
     it('should emit cancel download event', () => {
         // arrange
-        spyOn(sbDownloadPopupComponent.cancelDownloadEmit, 'emit');
+       jest.spyOn(sbDownloadPopupComponent.cancelDownloadEmit, 'emit');
         // act
         sbDownloadPopupComponent.ngOnInit();
         sbDownloadPopupComponent.cancelDownload();
@@ -86,6 +86,27 @@ describe('SbDownloadPopupComponent', () => {
         // act
         sbDownloadPopupComponent.ngOnChanges(changes);
         // assert
+        expect(sbDownloadPopupComponent.showDownload).toBeFalsy();
+    });
+
+    it('should populate all the required Fields for else case', () => {
+        // arrange
+        sbDownloadPopupComponent.queuedIdentifiers = 12312;
+        sbDownloadPopupComponent.currentCount = 2;
+        sbDownloadPopupComponent.downloadSize = 200;
+        sbDownloadPopupComponent.downloadProgress = 100;
+        sbDownloadPopupComponent.isUpdateAvail = true;
+        sbDownloadPopupComponent.contentName = 'sample_content_name';
+        sbDownloadPopupComponent.contentAvailableLocally = true;
+        // act
+        const changes: SimpleChanges = {
+        };
+        sbDownloadPopupComponent.ngOnChanges(changes);
+        // assert
+        expect(sbDownloadPopupComponent.queuedIdentifiers).toEqual(12312);
+        expect(sbDownloadPopupComponent.currentCount).toEqual(2);
+        expect(sbDownloadPopupComponent.downloadSize).toEqual(200);
+        expect(sbDownloadPopupComponent.downloadProgress).toEqual(100);
         expect(sbDownloadPopupComponent.showDownload).toBeFalsy();
     });
 

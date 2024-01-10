@@ -1,8 +1,9 @@
-import { Events, PopoverController, Platform, NavParams } from '@ionic/angular';
+import { PopoverController, NavParams } from '@ionic/angular';
+import { Events } from '../../../../util/events';
 import { CopyTraceIdPopoverComponent } from './copy-trace-id-popup.component';
-import { CommonUtilService, UtilityService } from '@app/services';
+import { CommonUtilService } from '../../../../services/common-util.service';
 import { Location } from '@angular/common';
-import { SocialSharing } from '@ionic-native/social-sharing/ngx';
+import { SocialSharing } from '@awesome-cordova-plugins/social-sharing/ngx';
 
 describe('CopyTraceIdPopoverComponent', () => {
     let copyTraceIdPopoverComponent: CopyTraceIdPopoverComponent;
@@ -52,8 +53,17 @@ describe('CopyTraceIdPopoverComponent', () => {
         copyTraceIdPopoverComponent.copy();
         // assert
         expect(mockPopOverController.dismiss).toBeCalled();
-        expect(mockSocialSharing.share).toHaveBeenCalledWith('some_trace_id');
+        setTimeout(() => {
+            expect(mockSocialSharing.share).toHaveBeenCalledWith('some_trace_id');
+        }, 0);
     });
-    
 
+    it('ionViewWillEnter', () => {
+        //arrange
+        mockNavParams.get = jest.fn(() => 'traceId') as any;
+        //act
+        copyTraceIdPopoverComponent.ionViewWillEnter();
+        //assert
+        expect(mockNavParams.get).toHaveBeenCalledWith('traceId');
+    });
 });

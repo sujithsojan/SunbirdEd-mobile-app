@@ -6,7 +6,8 @@ import {
     InteractType, InteractSubtype,
     Environment, PageId, ImpressionType
 } from '../../services';
-import { PopoverController, Events, Platform } from '@ionic/angular';
+import { PopoverController, Platform } from '@ionic/angular';
+import { Events } from '../../util/events';
 import { NgZone } from '@angular/core';
 import { Router } from '@angular/router';
 import { Location } from '@angular/common';
@@ -14,17 +15,16 @@ import {
     SharedPreferences,
     Batch,
     EnrollCourseRequest
-} from 'sunbird-sdk';
-import { PreferenceKey, EventTopics } from '../app.constant';
+} from '@project-sunbird/sunbird-sdk';
+import {PreferenceKey, EventTopics, RouterLinks} from '../app.constant';
 import { of, throwError } from 'rxjs';
-import { CategoryKeyTranslator } from '@app/pipes/category-key-translator/category-key-translator-pipe';
+import { CategoryKeyTranslator } from '../../pipes/category-key-translator/category-key-translator-pipe';
 
 describe('CourseBatchesPage', () => {
     let courseBatchesPage: CourseBatchesPage;
     const mockSharedPreferences: SharedPreferences = {};
     const mockAppGlobalService: Partial<AppGlobalService> = {};
     const mockPopoverCtrl: Partial<PopoverController> = {};
-    const mockLoginHandlerService: Partial<LoginHandlerService> = {};
     const mockZone: Partial<NgZone> = {};
     const mockCommonUtilService: Partial<CommonUtilService> = {};
     const mockEvents: Partial<Events> = {};
@@ -59,7 +59,6 @@ describe('CourseBatchesPage', () => {
             mockSharedPreferences as SharedPreferences,
             mockAppGlobalService as AppGlobalService,
             mockPopoverCtrl as PopoverController,
-            mockLoginHandlerService as LoginHandlerService,
             mockZone as NgZone,
             mockCommonUtilService as CommonUtilService,
             mockEvents as Events,
@@ -326,12 +325,11 @@ describe('CourseBatchesPage', () => {
             });
             mockPopoverCtrl.create = jest.fn(() => (Promise.resolve({
                 present: jest.fn(() => Promise.resolve({})),
-                onDidDismiss: jest.fn(() => Promise.resolve({ data: { canDelete: true } }))
+                onDidDismiss: jest.fn(() => Promise.resolve({ data: { canDelete: true, btn: '' } }))
             } as any)));
             mockSharedPreferences.putString = jest.fn(() => of(undefined));
-            mockLoginHandlerService.signIn = jest.fn();
             mockLocalCourseService.isEnrollable = jest.fn(() => true);
-
+            mockRouter.navigate = jest.fn();
             // act
             courseBatchesPage.enrollIntoBatch(batch);
             // assert
@@ -380,10 +378,190 @@ describe('CourseBatchesPage', () => {
                 expect(mockSharedPreferences.putString).toHaveBeenNthCalledWith(1, PreferenceKey.BATCH_DETAIL_KEY, JSON.stringify(batch));
                 expect(mockSharedPreferences.putString).toHaveBeenNthCalledWith(2, PreferenceKey.COURSE_DATA_KEY, JSON.stringify({}));
                 expect(mockSharedPreferences.putString).toHaveBeenNthCalledWith(3, PreferenceKey.CDATA_KEY, JSON.stringify([]));
-                expect(mockLoginHandlerService.signIn).toHaveBeenCalled();
+                expect(mockRouter.navigate).toHaveBeenCalledWith([RouterLinks.SIGN_IN], {state: {navigateToCourse: true}});
                 done();
             }, 0);
         });
+
+        it('Should show signin poup if guest user', (done) => {
+            // arrange
+            const batch: Batch = {
+                id: 'some_batch_id',
+                courseId: 'some_course_id',
+                status: 0
+            };
+            const enrollCourseRequest: EnrollCourseRequest = {
+                batchId: batch.id,
+                courseId: batch.courseId,
+                userId: 'sample-uid',
+                batchStatus: batch.status
+            };
+            mockLocalCourseService.prepareEnrollCourseRequest = jest.fn(() => (enrollCourseRequest));
+
+            const reqvalues = new Map();
+            reqvalues.set('enrollReq', enrollCourseRequest);
+            mockLocalCourseService.prepareRequestValue = jest.fn(() => (reqvalues));
+            mockTelemetryGeneratorService.generateInteractTelemetry = jest.fn();
+            mockTelemetryGeneratorService.generateImpressionTelemetry = jest.fn();
+            mockCommonUtilService.translateMessage = jest.fn((key, fields) => {
+                switch (key) {
+                    case 'YOU_MUST_JOIN_TO_ACCESS_TRAINING_DETAIL':
+                        return 'YOU_MUST_JOIN_TO_ACCESS_TRAINING_DETAIL';
+                    case 'TRAININGS_ONLY_REGISTERED_USERS':
+                        return 'TRAININGS_ONLY_REGISTERED_USERS';
+                    case 'OVERLAY_SIGN_IN':
+                        return 'OVERLAY_SIGN_IN';
+                }
+            });
+            mockPopoverCtrl.create = jest.fn(() => (Promise.resolve({
+                present: jest.fn(() => Promise.resolve({})),
+                onDidDismiss: jest.fn(() => Promise.resolve({ data: { canDelete: true, btn: {isInternetNeededMessage: ''} } }))
+            } as any)));
+            mockCommonUtilService.networkInfo = {
+                isNetworkAvailable: false
+            }
+            mockSharedPreferences.putString = jest.fn(() => of(undefined));
+            mockLocalCourseService.isEnrollable = jest.fn(() => true);
+            mockRouter.navigate = jest.fn();
+            // act
+            courseBatchesPage.enrollIntoBatch(batch);
+            // assert
+            setTimeout(() => {
+                expect(mockLocalCourseService.prepareEnrollCourseRequest).toHaveBeenCalledWith('sample-uid', batch);
+                expect(mockLocalCourseService.prepareRequestValue).toHaveBeenCalledWith(enrollCourseRequest);
+                expect(mockTelemetryGeneratorService.generateInteractTelemetry).toHaveBeenCalledWith(
+                    InteractType.TOUCH,
+                    InteractSubtype.ENROLL_CLICKED,
+                    Environment.HOME,
+                    PageId.COURSE_BATCHES,
+                    {
+                        id: '',
+                        type: '',
+                        version: '',
+                    },
+                    reqvalues,
+                    {},
+                    []);
+                expect(mockTelemetryGeneratorService.generateImpressionTelemetry).toHaveBeenCalledWith(
+                    ImpressionType.VIEW,
+                    '',
+                    PageId.SIGNIN_POPUP,
+                    Environment.HOME,
+                    '',
+                    '',
+                    '',
+                    {},
+                    []);
+                expect(mockCommonUtilService.translateMessage).toHaveBeenNthCalledWith(1, 'YOU_MUST_JOIN_TO_ACCESS_TRAINING_DETAIL');
+                expect(mockCommonUtilService.translateMessage).toHaveBeenNthCalledWith(2, 'TRAININGS_ONLY_REGISTERED_USERS');
+                expect(mockCommonUtilService.translateMessage).toHaveBeenNthCalledWith(3, 'OVERLAY_SIGN_IN');
+                expect(mockCommonUtilService.translateMessage).toHaveBeenNthCalledWith(4, 'OVERLAY_SIGN_IN');
+                expect(mockPopoverCtrl.create).toHaveBeenCalledWith(expect.objectContaining({
+                    componentProps: expect.objectContaining({
+                        sbPopoverHeading: 'OVERLAY_SIGN_IN',
+                        sbPopoverMainTitle: 'YOU_MUST_JOIN_TO_ACCESS_TRAINING_DETAIL',
+                        metaInfo: 'TRAININGS_ONLY_REGISTERED_USERS',
+                        actionsButtons: expect.arrayContaining([
+                            expect.objectContaining({
+                                btntext: 'OVERLAY_SIGN_IN'
+                            })
+                        ])
+                    })
+                }));
+                done();
+            }, 0);
+        });
+
+        it('Should show signin poup if guest user, return if network not available and has btn message', (done) => {
+            // arrange
+            const batch: Batch = {
+                id: 'some_batch_id',
+                courseId: 'some_course_id',
+                status: 0
+            };
+            const enrollCourseRequest: EnrollCourseRequest = {
+                batchId: batch.id,
+                courseId: batch.courseId,
+                userId: 'sample-uid',
+                batchStatus: batch.status
+            };
+            mockLocalCourseService.prepareEnrollCourseRequest = jest.fn(() => (enrollCourseRequest));
+
+            const reqvalues = new Map();
+            reqvalues.set('enrollReq', enrollCourseRequest);
+            mockLocalCourseService.prepareRequestValue = jest.fn(() => (reqvalues));
+            mockTelemetryGeneratorService.generateInteractTelemetry = jest.fn();
+            mockTelemetryGeneratorService.generateImpressionTelemetry = jest.fn();
+            mockCommonUtilService.translateMessage = jest.fn((key, fields) => {
+                switch (key) {
+                    case 'YOU_MUST_JOIN_TO_ACCESS_TRAINING_DETAIL':
+                        return 'YOU_MUST_JOIN_TO_ACCESS_TRAINING_DETAIL';
+                    case 'TRAININGS_ONLY_REGISTERED_USERS':
+                        return 'TRAININGS_ONLY_REGISTERED_USERS';
+                    case 'OVERLAY_SIGN_IN':
+                        return 'OVERLAY_SIGN_IN';
+                }
+            });
+            mockPopoverCtrl.create = jest.fn(() => (Promise.resolve({
+                present: jest.fn(() => Promise.resolve({})),
+                onDidDismiss: jest.fn(() => Promise.resolve({ data: { canDelete: true, btn: {isInternetNeededMessage: 'network'} } }))
+            } as any)));
+            mockCommonUtilService.networkInfo = {
+                isNetworkAvailable: false
+            }
+            mockCommonUtilService.showToast = jest.fn()
+            mockSharedPreferences.putString = jest.fn(() => of(undefined));
+            mockLocalCourseService.isEnrollable = jest.fn(() => true);
+            mockRouter.navigate = jest.fn();
+            // act
+            courseBatchesPage.enrollIntoBatch(batch);
+            // assert
+            setTimeout(() => {
+                expect(mockLocalCourseService.prepareEnrollCourseRequest).toHaveBeenCalledWith('sample-uid', batch);
+                expect(mockLocalCourseService.prepareRequestValue).toHaveBeenCalledWith(enrollCourseRequest);
+                expect(mockTelemetryGeneratorService.generateInteractTelemetry).toHaveBeenCalledWith(
+                    InteractType.TOUCH,
+                    InteractSubtype.ENROLL_CLICKED,
+                    Environment.HOME,
+                    PageId.COURSE_BATCHES,
+                    {
+                        id: '',
+                        type: '',
+                        version: '',
+                    },
+                    reqvalues,
+                    {},
+                    []);
+                expect(mockTelemetryGeneratorService.generateImpressionTelemetry).toHaveBeenCalledWith(
+                    ImpressionType.VIEW,
+                    '',
+                    PageId.SIGNIN_POPUP,
+                    Environment.HOME,
+                    '',
+                    '',
+                    '',
+                    {},
+                    []);
+                expect(mockCommonUtilService.translateMessage).toHaveBeenNthCalledWith(1, 'YOU_MUST_JOIN_TO_ACCESS_TRAINING_DETAIL');
+                expect(mockCommonUtilService.translateMessage).toHaveBeenNthCalledWith(2, 'TRAININGS_ONLY_REGISTERED_USERS');
+                expect(mockCommonUtilService.translateMessage).toHaveBeenNthCalledWith(3, 'OVERLAY_SIGN_IN');
+                expect(mockCommonUtilService.translateMessage).toHaveBeenNthCalledWith(4, 'OVERLAY_SIGN_IN');
+                expect(mockPopoverCtrl.create).toHaveBeenCalledWith(expect.objectContaining({
+                    componentProps: expect.objectContaining({
+                        sbPopoverHeading: 'OVERLAY_SIGN_IN',
+                        sbPopoverMainTitle: 'YOU_MUST_JOIN_TO_ACCESS_TRAINING_DETAIL',
+                        metaInfo: 'TRAININGS_ONLY_REGISTERED_USERS',
+                        actionsButtons: expect.arrayContaining([
+                            expect.objectContaining({
+                                btntext: 'OVERLAY_SIGN_IN'
+                            })
+                        ])
+                    })
+                }));
+                done();
+            }, 0);
+        });
+
 
         it('Should show signin poup if guest user and clicked dismiss', (done) => {
             // arrange
@@ -484,8 +662,10 @@ describe('CourseBatchesPage', () => {
         // act
         courseBatchesPage.onConsentPopoverShow();
         // assert
-        expect(courseBatchesPage.loader).toBeUndefined();
-        expect(dismissFn).toHaveBeenCalled();
+        setTimeout(() => {
+            expect(courseBatchesPage.loader).toBeUndefined();
+            expect(dismissFn).toHaveBeenCalled();
+        }, 0);
     });
 
     it('shoule invoked after consentPii popup dismissed', () => {

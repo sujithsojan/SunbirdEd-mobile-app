@@ -1,17 +1,17 @@
-import { Component, OnInit, Inject, Input } from '@angular/core';
+import { Component, Inject, Input } from '@angular/core';
 import { Platform, NavParams, PopoverController, MenuController } from '@ionic/angular';
-import { GenerateOtpRequest, IsProfileAlreadyInUseRequest, ProfileService } from 'sunbird-sdk';
-import { ProfileConstants } from '@app/app/app.constant';
+import { GenerateOtpRequest, IsProfileAlreadyInUseRequest, ProfileService } from '@project-sunbird/sunbird-sdk';
+import { ProfileConstants } from '../../../../app/app.constant';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { CommonUtilService } from '../../../../services/common-util.service';
-import { Keyboard } from '@ionic-native/keyboard/ngx';
+import { Keyboard } from '@awesome-cordova-plugins/keyboard/ngx';
 
 @Component({
   selector: 'app-edit-contact-details-popup',
   templateUrl: './edit-contact-details-popup.component.html',
   styleUrls: ['./edit-contact-details-popup.component.scss'],
 })
-export class EditContactDetailsPopupComponent implements OnInit {
+export class EditContactDetailsPopupComponent {
 
   // Data passed in by componentProps
   @Input() userId: string;
@@ -46,12 +46,11 @@ export class EditContactDetailsPopupComponent implements OnInit {
     this.initEditForm();
   }
 
-  ngOnInit() { }
 
-  ionViewWillEnter() {
-    this.menuCtrl.enable(false);
-    this.unregisterBackButton = this.platform.backButton.subscribeWithPriority(11, () => {
-      this.popOverCtrl.dismiss();
+  async ionViewWillEnter() {
+    await this.menuCtrl.enable(false);
+    this.unregisterBackButton = this.platform.backButton.subscribeWithPriority(11, async () => {
+      await this.popOverCtrl.dismiss();
     });
   }
 
@@ -94,12 +93,12 @@ export class EditContactDetailsPopupComponent implements OnInit {
             this.updateErr = true;
           } else {
             this.err = true;
-          }
+          }   
         }
       }, async (error) => {
-        if (error.response && error.response.body.params.err === 'USER_NOT_FOUND') {
-          this.generateOTP();
-        } else if (error.response && error.response.body.params.err === 'USER_ACCOUNT_BLOCKED') {
+        if (error.response && error.response.body.params.err === 'UOS_USRRED0013') {
+          await this.generateOTP();
+        } else if (error.response && error.response.body.params.err === 'USER_NOT_FOUND') {
           this.blockedAccount = true;
           if (this.loader) {
             await this.loader.dismiss();
@@ -146,9 +145,9 @@ export class EditContactDetailsPopupComponent implements OnInit {
           this.loader = undefined;
         }
         if (this.type === ProfileConstants.CONTACT_TYPE_PHONE) {
-          this.popOverCtrl.dismiss({ isEdited: true, value: this.personEditForm.value.phone });
+          await this.popOverCtrl.dismiss({ isEdited: true, value: this.personEditForm.value.phone });
         } else {
-          this.popOverCtrl.dismiss({ isEdited: true, value: this.personEditForm.value.email });
+          await this.popOverCtrl.dismiss({ isEdited: true, value: this.personEditForm.value.email });
         }
       })
       .catch(async (err) => {
@@ -156,23 +155,19 @@ export class EditContactDetailsPopupComponent implements OnInit {
           await this.loader.dismiss();
           this.loader = undefined;
         }
-        this.popOverCtrl.dismiss({ isEdited: false });
-        if (err.hasOwnProperty(err) === 'ERROR_RATE_LIMIT_EXCEEDED') {
+        await this.popOverCtrl.dismiss({ isEdited: false });
+        if (err.hasOwnProperty(err) === 'UOS_OTPCRT0059') {
           this.commonUtilService.showToast('You have exceeded the maximum limit for OTP, Please try after some time');
         }
       });
   }
 
-  async cancel(event) {
-    if (event.sourceCapabilities) {
-      await this.popOverCtrl.dismiss({ isEdited: false });
-    } else {
-      this.keyboard.hide();
-    }
+  async cancel() {
+    await this.popOverCtrl.dismiss({ isEdited: false });
   }
 
-  ionViewWillLeave() {
-    this.menuCtrl.enable(true);
+  async ionViewWillLeave() {
+    await this.menuCtrl.enable(true);
     if (this.unregisterBackButton) {
       this.unregisterBackButton.unsubscribe();
     }

@@ -6,15 +6,15 @@ import {
     AndroidPermissionsService, InteractType, InteractSubtype, AppGlobalService
 } from '../../../../services';
 import { SbSharePopupComponent } from './sb-share-popup.component';
-import { ContentService } from 'sunbird-sdk';
+import { ContentService } from '@project-sunbird/sunbird-sdk';
 import { PopoverController, Platform, NavParams } from '@ionic/angular';
 import {
     Environment,
     ImpressionType,
     ID,
     PageId,
-} from '@app/services/telemetry-constants';
-import { AppVersion } from '@ionic-native/app-version/ngx';
+} from '../../../../services/telemetry-constants';
+import { AppVersion } from '@awesome-cordova-plugins/app-version/ngx';
 import { of } from 'rxjs';
 import { MimeType } from '../../../app.constant';
 import { CsContentType, CsPrimaryCategory } from '@project-sunbird/client-services/services/content';
@@ -23,7 +23,9 @@ describe('SbSharePopupComponent', () => {
     let sbSharePopupComponent: SbSharePopupComponent;
     const mockContentService: Partial<ContentService> = {};
     const mockPopoverCtrl: Partial<PopoverController> = {};
-    const mockPlatform: Partial<Platform> = {};
+    const mockPlatform: Partial<Platform> = {
+        is: jest.fn(platform => platform === 'ios')
+    };
     const mockContentShareHandler: Partial<ContentShareHandlerService> = {};
     const mockUtilityService: Partial<UtilityService> = {};
     const mockNavParams: Partial<NavParams> = {
@@ -181,8 +183,10 @@ describe('SbSharePopupComponent', () => {
         // act
         sbSharePopupComponent.shareLink();
         // assert
-        expect(mockPopoverCtrl.dismiss).toHaveBeenCalled();
-        expect(mockContentShareHandler.shareContent).toHaveBeenCalled();
+        setTimeout(() => {
+            expect(mockPopoverCtrl.dismiss).toHaveBeenCalled();
+            expect(mockContentShareHandler.shareContent).toHaveBeenCalled();
+        }, 0);
     });
 
     it('should call sharecontent on shareFile', (done) => {

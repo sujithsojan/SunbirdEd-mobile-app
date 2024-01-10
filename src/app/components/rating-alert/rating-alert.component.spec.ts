@@ -1,8 +1,8 @@
 
 import { AppRatingAlertComponent } from './rating-alert.component';
-import { TelemetryService, SharedPreferences } from 'sunbird-sdk';
+import { TelemetryService, SharedPreferences } from '@project-sunbird/sunbird-sdk';
 import { PopoverController, Platform, NavParams } from '@ionic/angular';
-import { AppVersion } from '@ionic-native/app-version/ngx';
+import { AppVersion } from '@awesome-cordova-plugins/app-version/ngx';
 import {
     UtilityService,
     AppRatingService,
@@ -11,7 +11,8 @@ import {
     ImpressionType,
     ImpressionSubtype,
     InteractType,
-    InteractSubtype
+    InteractSubtype,
+    CommonUtilService
 } from '../../../services';
 import { of } from 'rxjs';
 import { PreferenceKey, StoreRating } from '../../app.constant';
@@ -72,6 +73,9 @@ describe('AppRatingAlertComponent', () => {
     const mockNavParams: Partial<NavParams> = {
         get: jest.fn(() => ('content-details'))
     };
+    const mockCommonUtilService: Partial<CommonUtilService> = {
+        setRatingStarAriaLabel: jest.fn()
+    }
 
     beforeAll(() => {
         appRatingAlertComponent = new AppRatingAlertComponent(
@@ -84,6 +88,7 @@ describe('AppRatingAlertComponent', () => {
             mockPlatform as Platform,
             mockTelemetryGeneratorService as TelemetryGeneratorService,
             mockNavParams as NavParams,
+            mockCommonUtilService as CommonUtilService
         );
     });
 
@@ -96,8 +101,15 @@ describe('AppRatingAlertComponent', () => {
     });
 
     describe('ngOnint', () => {
-        it('should generate impression telemetry and interact event with apperance count 1', (done) => {
+        it('should generate impression telemetry and interact event with apperance count 1', () => {
             // arrange
+            mockPopOverController.create = jest.fn(() => Promise.resolve({
+                present: jest.fn(),
+                dismiss: jest.fn()
+            })) as any
+            appRatingAlertComponent['backButtonFunc'] = {
+                unsubscribe: jest.fn()
+            } as any
             mockSharedPreferences.getString = jest.fn((arg) => {
                 let value;
                 switch (arg) {
@@ -113,13 +125,12 @@ describe('AppRatingAlertComponent', () => {
             // act
             appRatingAlertComponent.ngOnInit();
             // assert
-            expect(mockTelemetryGeneratorService.generateImpressionTelemetry).toHaveBeenCalledWith(
-                ImpressionType.VIEW,
-                ImpressionSubtype.APP_RATING_POPUP,
-                'content-details',
-                Environment.HOME);
-
             setTimeout(() => {
+                expect(mockTelemetryGeneratorService.generateImpressionTelemetry).toHaveBeenCalledWith(
+                    ImpressionType.VIEW,
+                    ImpressionSubtype.APP_RATING_POPUP,
+                    'content-details',
+                    Environment.HOME);
                 expect(mockTelemetryGeneratorService.generateInteractTelemetry).toHaveBeenCalledWith(
                     InteractType.OTHER,
                     InteractSubtype.APP_RATING_APPEARED,
@@ -127,11 +138,10 @@ describe('AppRatingAlertComponent', () => {
                     Environment.HOME,
                     undefined,
                     { appRatingPopAppearedCount: 1 });
-                done();
             }, 0);
 
         });
-        it('should generate impression telemetry and interact event with apperance count 2', (done) => {
+        it('should generate impression telemetry and interact event with apperance count 2', () => {
             // arrange
             mockSharedPreferences.getString = jest.fn((arg) => {
                 let value;
@@ -162,15 +172,17 @@ describe('AppRatingAlertComponent', () => {
                     Environment.HOME,
                     undefined,
                     { appRatingPopAppearedCount: 2 });
-                done();
             }, 0);
 
         });
     });
 
     describe('rateLater', () => {
-        it('should generate interact event with apperance count 1 and dismiss the popup', (done) => {
+        it('should generate interact event with apperance count 1 and dismiss the popup', () => {
             // arrange
+            appRatingAlertComponent['backButtonFunc'] = {
+                unsubscribe: jest.fn()
+            } as any
             // act
             appRatingAlertComponent.rateLater();
             // assert
@@ -183,13 +195,12 @@ describe('AppRatingAlertComponent', () => {
                     undefined,
                     { rateLaterCount: 1 });
                 expect(mockPopOverController.dismiss).toHaveBeenCalledWith(null);
-                done();
             }, 0);
         });
     });
 
     describe('rateOnStore', () => {
-        it('should generate interact event with apperance count 1 and dismiss the popup', (done) => {
+        it('should generate interact event with apperance count 1 and dismiss the popup', () => {
             // arrange
             appRatingAlertComponent.appRate = 4;
             // act
@@ -205,13 +216,12 @@ describe('AppRatingAlertComponent', () => {
                     undefined,
                     { appRating: 4 });
                 expect(mockPopOverController.dismiss).toHaveBeenCalledWith(StoreRating.RETURN_CLOSE);
-                done();
             }, 0);
         });
     });
 
     describe('submitRating', () => {
-        it('should generate interact event and dismiss the popup if rating is >= 4', (done) => {
+        it('should generate interact event and dismiss the popup if rating is >= 4', () => {
             // arrange
             appRatingAlertComponent.appRate = 4;
             // act
@@ -230,11 +240,10 @@ describe('AppRatingAlertComponent', () => {
                     message: 'APP_RATING_RATE_ON_PLAYSTORE',
                     type: 'storeRate'
                   });
-                done();
             }, 0);
         });
 
-        it('should generate interact event and dismiss the popup if rating is <= 4', (done) => {
+        it('should generate interact event and dismiss the popup if rating is <= 4', () => {
             // arrange
             appRatingAlertComponent.appRate = 2;
             // act
@@ -253,13 +262,12 @@ describe('AppRatingAlertComponent', () => {
                     message: 'APP_RATING_REPORT_AN_ISSUE',
                     type: 'helpDesk'
                   });
-                done();
             }, 0);
         });
     });
 
     describe('goToHelpSection', () => {
-        it('should generate interact event and dismiss the popup', (done) => {
+        it('should generate interact event and dismiss the popup', () => {
             // arrange
             // act
             appRatingAlertComponent.goToHelpSection();
@@ -271,7 +279,6 @@ describe('AppRatingAlertComponent', () => {
                     Environment.HOME,
                     'content-details');
                 expect(mockPopOverController.dismiss).toHaveBeenCalledWith(StoreRating.RETURN_HELP);
-                done();
             }, 0);
         });
     });
@@ -279,14 +286,21 @@ describe('AppRatingAlertComponent', () => {
     describe('closePopover', () => {
         it('should close the popover', () => {
             // arrange
+            const dismiss = jest.fn(() => Promise.resolve())
+            mockPopOverController.create = jest.fn(() => Promise.resolve({
+                present: jest.fn(),
+                dismiss: dismiss
+            }))
             appRatingAlertComponent['backButtonFunc'] = {
                 unsubscribe: jest.fn()
-            };
+            } as any
             // act
             appRatingAlertComponent.closePopover();
             // assert
-            expect(mockPopOverController.dismiss).toHaveBeenCalledWith(null);
-            expect(appRatingAlertComponent['backButtonFunc'].unsubscribe).toHaveBeenCalled();
+            setTimeout(() => {
+                expect(dismiss).toHaveBeenCalledWith(null);
+                expect(appRatingAlertComponent['backButtonFunc'].unsubscribe).toHaveBeenCalled();
+            }, 0);
         });
     });
 

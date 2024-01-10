@@ -1,5 +1,6 @@
 import { Component, OnInit, Inject, NgZone, ViewChild } from '@angular/core';
-import { Events, PopoverController } from '@ionic/angular';
+import { PopoverController } from '@ionic/angular';
+import { Events } from '../../util/events';
 import { Router } from '@angular/router';
 import {
   Content,
@@ -16,24 +17,27 @@ import {
   SortOrder,
   StorageService,
   StorageDestination
-} from 'sunbird-sdk';
-import { AppGlobalService } from '@app/services/app-global-service.service';
-import { AppHeaderService, } from '@app/services/app-header.service';
-import { CommonUtilService, } from '@app/services/common-util.service';
-import { TelemetryGeneratorService } from '@app/services/telemetry-generator.service';
+} from '@project-sunbird/sunbird-sdk';
+import { AppGlobalService } from '../../services/app-global-service.service';
+import { AppHeaderService, } from '../../services/app-header.service';
+import { CommonUtilService, } from '../../services/common-util.service';
+import { TelemetryGeneratorService } from '../../services/telemetry-generator.service';
 import { AppStorageInfo, DownloadManagerPageInterface, EmitedContents } from './download-manager.interface';
-import { RouterLinks, ContentFilterConfig, EventTopics } from '@app/app/app.constant';
-import { SbPopoverComponent } from '@app/app/components/popups/sb-popover/sb-popover.component';
-import { PageId, InteractType, Environment, InteractSubtype } from '@app/services/telemetry-constants';
-import { FormAndFrameworkUtilService } from '@app/services';
+import { RouterLinks, ContentFilterConfig, EventTopics } from '../../app/app.constant';
+import { SbPopoverComponent } from '../../app/components/popups/sb-popover/sb-popover.component';
+import { PageId, InteractType, Environment, InteractSubtype } from '../../services/telemetry-constants';
+import { FormAndFrameworkUtilService } from '../../services/formandframeworkutil.service';
 import { featureIdMap } from '../feature-id-map';
 import { BehaviorSubject } from 'rxjs';
 import {
   SbInsufficientStoragePopupComponent
-} from '@app/app/components/popups/sb-insufficient-storage-popup/sb-insufficient-storage-popup';
+} from '../../app/components/popups/sb-insufficient-storage-popup/sb-insufficient-storage-popup';
 import { DownloadsTabComponent } from './downloads-tab/downloads-tab.component';
 import { finalize, tap, skip, takeWhile } from 'rxjs/operators';
-import { ContentUtil } from '@app/util/content-util';
+import { ContentUtil } from '../../util/content-util';
+import { DbService } from '../manage-learn/core/services/db.service';
+import { UtilsService, LocalStorageService } from '../manage-learn/core';
+import { storageKeys } from '../manage-learn/storageKeys';
 
 @Component({
   selector: 'app-download-manager',
@@ -52,7 +56,7 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
   sortCriteria: ContentSortCriteria[];
   storageDestination: any;
   private deletedContentListTitle$?: BehaviorSubject<string>;
-  @ViewChild('downloadsTab') downloadsTab: DownloadsTabComponent;
+  @ViewChild('downloadsTab', { static: false }) downloadsTab: DownloadsTabComponent;
 
   constructor(
     @Inject('CONTENT_SERVICE') private contentService: ContentService,
@@ -67,7 +71,16 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
     private router: Router,
     private telemetryGeneratorService: TelemetryGeneratorService,
     private formAndFrameworkUtilService: FormAndFrameworkUtilService,
-  ) { }
+    private db: DbService,
+    private storage: LocalStorageService,
+    private utils: UtilsService
+  ) {
+    this.events.subscribe(EventTopics.LAST_ACCESS_ON, async (data) => {
+      if (data) {
+        await this.getDownloadedContents();
+      }
+    });
+  }
 
   async ngOnInit() {
     this.subscribeContentUpdateEvents();
@@ -78,28 +91,28 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
   }
 
   async ionViewWillEnter() {
-    this.events.subscribe('update_header', () => {
-      this.headerService.showHeaderWithHomeButton(['download', 'settings']);
+    this.events.subscribe('update_header', async () => {
+      await this.headerService.showHeaderWithHomeButton(['download', 'settings']);
     });
-    this.headerObservable = this.headerService.headerEventEmitted$.subscribe(eventName => {
-      this.handleHeaderEvents(eventName);
+    this.headerObservable = this.headerService.headerEventEmitted$.subscribe(async eventName => {
+      await this.handleHeaderEvents(eventName);
     });
 
-    this.headerService.showHeaderWithHomeButton(['download', 'settings']);
+    await this.headerService.showHeaderWithHomeButton(['download', 'settings']);
     await this.getAppStorageInfo();
-    this.getDownloadedContents();
+    await this.getDownloadedContents();
     this.checkAvailableSpace();
-    this.fetchStorageDestination();
-    this.events.subscribe(EventTopics.HAMBURGER_MENU_CLICKED, () => {
-      this.closeSelectAllPopup();
+    await this.fetchStorageDestination();
+    this.events.subscribe(EventTopics.HAMBURGER_MENU_CLICKED, async () => {
+      await this.closeSelectAllPopup();
     });
   }
 
   private async getAppName() {
-    return this.commonUtilService.getAppName()
+    return await this.commonUtilService.getAppName()
       .then((appName: any) => {
         this.appName = appName;
-      });
+      }).catch(err => console.log(err));
   }
 
   private async getAppStorageInfo(): Promise<AppStorageInfo> {
@@ -115,7 +128,6 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
             return this.storageInfo;
           });
       });
-
   }
 
   async getDownloadedContents(shouldGenerateTelemetry?, ignoreLoader?) {
@@ -146,12 +158,42 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
           value.contentData.appIcon = ContentUtil.getAppIcon(value.contentData.appIcon,
             value.basePath, this.commonUtilService.networkInfo.isNetworkAvailable);
         });
-        this.ngZone.run(async () => {
+        const query = {
+            selector: {
+           downloaded: true,
+          },
+        }; 
+        if(this.db.pdb){
+          let projectData: any = await this.db.customQuery(query);
+          if (projectData.docs) {
+            projectData.docs.sort(function (a, b) {
+                return  new Date(b.updatedAt || b.syncedAt).valueOf() - new Date(a.updatedAt || a.syncedAt).valueOf() ;
+              });
+              projectData.docs.map(doc => {
+                doc.contentData = { lastUpdatedOn: doc.updatedAt,name:doc.title };
+                doc.type = 'project'
+                doc.identifier=doc._id;
+                data.push(doc)
+            })
+          }
+        }
+        await this.storage
+        .getLocalStorage(storageKeys.downloadedObservations)
+        .then(resp => {
+          resp.sort(function(a, b) {
+            return ( new Date(b.lastViewedAt).valueOf() - new Date(a.lastViewedAt).valueOf());
+          });
+          resp.map(res => {
+            res.contentData = { lastUpdatedOn: res.lastViewedAt, name: res.name, subject:res.programName };
+            res.type = 'observation';
+            res.identifier = res.programId + res.solutionId;
+            data.push(res);
+          });
+        }).catch(err => console.log(err));
+        await this.ngZone.run(async () => {
           this.downloadedContents = data;
         });
-      })
-      .catch((e) => {
-      });
+      }).catch(err => console.log(err));
   }
 
   private generateInteractTelemetry(contentCount: number, usedSpace: number, availableSpace: number) {
@@ -163,9 +205,22 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
   }
 
   async deleteContents(emitedContents: EmitedContents) {
+    const projectContents = emitedContents.selectedContents.filter((content) => (content['type'] == 'project'));
+    const observationContents = emitedContents.selectedContents.filter( content => (content['type'] == 'observation'));
+    emitedContents.selectedContents = emitedContents.selectedContents.filter(content => !content['type'] || (content['type'] != 'project' && content['type'] != 'observation'));
+
+    if (!emitedContents.selectedContents.length) {
+      this.deleteProjects(projectContents);
+      this.deleteObservations(observationContents).then().catch(e => console.error(e));
+      return;
+    }
+    this.deleteProjects(projectContents)
+    this.deleteObservations(observationContents).then().catch(e => console.error(e));
+
     const contentDeleteRequest: ContentDeleteRequest = {
-      contentDeleteList: emitedContents.selectedContents
+      contentDeleteList: emitedContents.selectedContents,
     };
+
     if (emitedContents.selectedContents.length > 1) {
       await this.deleteAllContents(emitedContents);
     } else {
@@ -176,7 +231,6 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
         .then(async (data: ContentDeleteResponse[]) => {
           await this.loader.dismiss();
           this.loader = undefined;
-          // this.getDownloadedContents();
           if (data && data[0].status === ContentDeleteStatus.NOT_FOUND) {
             this.commonUtilService.showToast(this.commonUtilService.translateMessage('CONTENT_DELETE_FAILED'));
           } else {
@@ -227,16 +281,15 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
     });
     await this.deleteAllConfirm.present();
 
-    this.deleteAllConfirm.onDidDismiss().then((response) => {
-      if (response) {
-        this.contentService.clearContentDeleteQueue().toPromise();
-      }
-    });
-    this.contentService.enqueueContentDelete(contentDeleteRequest).toPromise();
+    let response = this.deleteAllConfirm.onDidDismiss()
+    if (response) {
+      await this.contentService.clearContentDeleteQueue().toPromise();
+    }
+    await this.contentService.enqueueContentDelete(contentDeleteRequest).toPromise();
     this.contentService.getContentDeleteQueue().pipe(
       skip(1),
       takeWhile((list) => !!list.length),
-      finalize(async () => {
+      finalize(() => {
         this.deletedContentListTitle$
           .next(`${contentDeleteRequest.contentDeleteList.length}/${contentDeleteRequest.contentDeleteList.length}`);
 
@@ -275,52 +328,53 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
       sortOrder: SortOrder.DESC,
       sortAttribute: sortAttr
     }];
-    this.getDownloadedContents();
+    this.getDownloadedContents().then().catch(e => console.error(e));
   }
 
   ionViewWillLeave(): void {
     this.events.unsubscribe('update_header');
     this.headerObservable.unsubscribe();
     this.events.unsubscribe(EventTopics.HAMBURGER_MENU_CLICKED);
+    this.events.unsubscribe(EventTopics.LAST_ACCESS_ON);
   }
 
   private subscribeContentUpdateEvents() {
     this.events.subscribe('savedResources:update', async (res) => {
       if (res && res.update) {
-        this.getDownloadedContents(false, true);
+        await this.getDownloadedContents(false, true);
         await this.getAppStorageInfo();
       }
     });
   }
 
-  private handleHeaderEvents($event) {
+  private async handleHeaderEvents($event) {
     switch ($event.name) {
       case 'download':
-        this.redirectToActivedownloads();
+        await this.redirectToActivedownloads();
         break;
       case 'settings':
-        this.closeSelectAllPopup();
+        await this.closeSelectAllPopup();
         this.redirectToSettings();
         break;
     }
   }
-
-  private redirectToActivedownloads() {
+  
+  private async redirectToActivedownloads() {
     this.telemetryGeneratorService.generateInteractTelemetry(
       InteractType.TOUCH,
       InteractSubtype.ACTIVE_DOWNLOADS_CLICKED,
       Environment.DOWNLOADS,
       PageId.DOWNLOADS);
-    this.router.navigate([RouterLinks.ACTIVE_DOWNLOADS]);
+    await this.router.navigate([RouterLinks.ACTIVE_DOWNLOADS]);
   }
 
-  private redirectToSettings() {
+  private async redirectToSettings() {
     this.telemetryGeneratorService.generateInteractTelemetry(
       InteractType.TOUCH,
       InteractSubtype.SETTINGS_CLICKED,
       Environment.DOWNLOADS,
       PageId.DOWNLOADS);
-    this.router.navigate([RouterLinks.STORAGE_SETTINGS]);
+    await this.router.navigate([RouterLinks.STORAGE_SETTINGS]);
   }
 
   private async fetchStorageDestination() {
@@ -345,9 +399,9 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
 
   private checkAvailableSpace() {
     this.storageService.getStorageDestinationVolumeInfo().pipe(
-      tap((volumeInfo) => {
+      tap(async (volumeInfo) => {
         if (volumeInfo.info.availableSize < 209715200) {
-          this.presentPopupForLessStorageSpace();
+          await this.presentPopupForLessStorageSpace();
         }
       })
     )
@@ -357,8 +411,40 @@ export class DownloadManagerPage implements DownloadManagerPageInterface, OnInit
   async closeSelectAllPopup() {
     if (this.downloadsTab && this.downloadsTab.deleteAllConfirm) {
       await this.downloadsTab.deleteAllConfirm.dismiss();
-      this.downloadsTab.unSelectAllContents();
+      await this.downloadsTab.unSelectAllContents();
     }
   }
 
+  deleteProjects(contents) {
+
+    contents.forEach(async (element) => {
+      let project = await this.db.getById(element.contentId)
+      project.downloaded = false
+      await this.db.delete(project._id, project._rev)
+      this.events.publish('savedResources:update', {
+        update: true,
+      });
+      this.commonUtilService.showToast(this.commonUtilService.translateMessage('MSG_RESOURCE_DELETED'));
+
+
+    });
+  }
+  async deleteObservations(content) {
+    let downloadedObs = await this.storage.getLocalStorage(storageKeys.downloadedObservations);
+    const contentIds = content.map(c => c.contentId)
+    downloadedObs = downloadedObs.filter(obs => {
+      const shouldDelete = contentIds.includes(obs.programId + obs.solutionId)
+      if (shouldDelete) {
+        obs.downloadedSubmission.forEach(async submission => {
+          await this.storage.deleteOneStorage(this.utils.getAssessmentLocalStorageKey(submission));
+        });
+      } 
+      return !shouldDelete
+    })
+    await this.storage.setLocalStorage(storageKeys.downloadedObservations,downloadedObs);
+    this.events.publish("savedResources:update", {update: true});
+      this.commonUtilService.showToast(
+        this.commonUtilService.translateMessage("MSG_RESOURCE_DELETED")
+      );
+  }
 }

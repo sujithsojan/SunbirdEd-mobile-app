@@ -1,21 +1,10 @@
-import { Component, Inject, NgZone, OnInit } from '@angular/core';
-import { Platform, PopoverController } from '@ionic/angular';
-import { NavParams } from '@ionic/angular';
-import {
-  ContentFeedback,
-  ContentFeedbackService,
-  TelemetryLogRequest,
-  TelemetryService,
-  TelemetryObject,
-  FormRequest,
-  FormService,
-  SharedPreferences,
-  TelemetryFeedbackRequest
-} from 'sunbird-sdk';
-import { TelemetryGeneratorService } from '@app/services/telemetry-generator.service';
-import { ProfileConstants, PreferenceKey } from '@app/app/app.constant';
-import { AppGlobalService } from '@app/services/app-global-service.service';
-import { CommonUtilService } from '@app/services/common-util.service';
+import { Location } from '@angular/common';
+import { Component, Inject } from '@angular/core';
+import { PreferenceKey, ProfileConstants } from '../../../app/app.constant';
+import { FormConstants } from '../../../app/form.constants';
+import { FormAndFrameworkUtilService } from '../../../services/formandframeworkutil.service';
+import { AppGlobalService } from '../../../services/app-global-service.service';
+import { CommonUtilService } from '../../../services/common-util.service';
 import {
   Environment,
   ImpressionSubtype,
@@ -24,9 +13,18 @@ import {
   InteractType,
   LogLevel,
   LogType
-} from '@app/services/telemetry-constants';
-import { ContentUtil } from '@app/util/content-util';
-import { Location } from '@angular/common';
+} from '../../../services/telemetry-constants';
+import { TelemetryGeneratorService } from '../../../services/telemetry-generator.service';
+import { ContentUtil } from '../../../util/content-util';
+import { NavParams, Platform, PopoverController } from '@ionic/angular';
+import {
+  ContentFeedback,
+  ContentFeedbackService,
+  FormService,
+  SharedPreferences,
+  TelemetryFeedbackRequest, TelemetryLogRequest,
+  TelemetryObject, TelemetryService
+} from '@project-sunbird/sunbird-sdk';
 
 @Component({
   selector: 'app-content-rating-alert',
@@ -58,16 +56,17 @@ export class ContentRatingAlertComponent {
     @Inject('FORM_SERVICE') private formService: FormService,
     @Inject('SHARED_PREFERENCES') private preferences: SharedPreferences,
     private popOverCtrl: PopoverController,
-    private platform: Platform,
+    public platform: Platform,
     private navParams: NavParams,
     private telemetryGeneratorService: TelemetryGeneratorService,
     private appGlobalService: AppGlobalService,
     private commonUtilService: CommonUtilService,
-    private location: Location
+    private location: Location,
+    private formAndFrameworkUtilService: FormAndFrameworkUtilService
   ) {
     this.getUserId();
-    this.backButtonFunc = this.platform.backButton.subscribeWithPriority(11, () => {
-      this.popOverCtrl.dismiss();
+    this.backButtonFunc = this.platform.backButton.subscribeWithPriority(11, async () => {
+      await this.popOverCtrl.dismiss();
       this.backButtonFunc.unsubscribe();
     });
     this.content = this.navParams.get('content');
@@ -79,7 +78,7 @@ export class ContentRatingAlertComponent {
     this.navigateBack = this.navParams.get('navigateBack');
   }
 
-  ionViewWillEnter() {
+  async ionViewWillEnter() {
     this.telemetryGeneratorService.generateImpressionTelemetry(
       ImpressionType.VIEW,
       ImpressionSubtype.RATING_POPUP,
@@ -104,7 +103,9 @@ export class ContentRatingAlertComponent {
     }, err => {
       console.log(err);
     });
-    this.invokeContentRatingFormApi();
+    await this.invokeContentRatingFormApi();
+    const ratingDomTag = document.getElementsByTagName('rating');
+    this.commonUtilService.setRatingStarAriaLabel(ratingDomTag, this.userRating);
   }
 
   ionViewWillLeave() {
@@ -127,16 +128,24 @@ export class ContentRatingAlertComponent {
   rateContent(ratingCount) {
     this.ratingCount = ratingCount;
     this.createRatingForm(ratingCount);
+    const ratingDomTag = document.getElementsByTagName('rating');
+    this.commonUtilService.setRatingStarAriaLabel(ratingDomTag, ratingCount);
   }
 
-  cancel() {
-    this.popOverCtrl.dismiss();
+  async cancel() {
+    await this.popOverCtrl.dismiss();
   }
-  closePopover() {
-    this.popOverCtrl.dismiss();
+  async closePopover() {
+    this.telemetryGeneratorService.generateInteractTelemetry(
+      InteractType.TOUCH,
+      InteractSubtype.CLOSE_CLICKED,
+      Environment.HOME,
+      ImpressionSubtype.RATING_POPUP, this.telemetryObject
+    );
+    await this.popOverCtrl.dismiss();
   }
 
-  submit() {
+  async submit() {
     let comment = '';
     this.ratingOptions.forEach(element => {
       if (element.key.toLowerCase() !== 'other' && element.isChecked) {
@@ -163,7 +172,7 @@ export class ContentRatingAlertComponent {
       Environment.HOME,
       this.pageId, this.telemetryObject, paramsMap
     );
-    this.generateContentRatingTelemetry(option);
+    await this.generateContentRatingTelemetry(option);
     if (this.allComments) {
       this.generateContentFeedbackTelemetry(option);
     }
@@ -177,6 +186,7 @@ export class ContentRatingAlertComponent {
     if (rating === 0) {
       return;
     }
+    console.log('this.contentRatingOptions[rating].ratingText', this.contentRatingOptions[rating].ratingText)
     this.ratingMetaInfo = {
       ratingText: this.contentRatingOptions[rating].ratingText,
       ratingQuestion: this.contentRatingOptions[rating].question
@@ -211,32 +221,19 @@ export class ContentRatingAlertComponent {
 
   async invokeContentRatingFormApi() {
     const selectedLanguage = await this.preferences.getString(PreferenceKey.SELECTED_LANGUAGE_CODE).toPromise();
-    const req: FormRequest = {
-      type: 'contentfeedback',
-      subType: selectedLanguage,
-      action: 'get'
-    };
-    this.formService.getForm(req).toPromise()
-      .then((res: any) => {
-        const data = res.form.data.fields;
-        this.populateComments(data);
-      }).catch((error: any) => {
-        this.getDefaultContentRatingFormApi();
-      });
+    await this.formAndFrameworkUtilService.getFormFields({...FormConstants.CONTENT_FEEDBACK, subType: selectedLanguage}).then((res) => {
+      this.populateComments(res);
+    }).catch(async (error) => {
+      await this.getDefaultContentRatingFormApi();
+    });
   }
 
-  getDefaultContentRatingFormApi() {
-    const req: FormRequest = {
-      type: 'contentfeedback',
-      subType: 'en',
-      action: 'get'
-    };
-    this.formService.getForm(req).toPromise()
-      .then((res: any) => {
-        const data = res.form.data.fields;
-        this.populateComments(data);
-      }).catch((error: any) => {
-      });
+  async getDefaultContentRatingFormApi() {
+    await this.formAndFrameworkUtilService.getFormFields(FormConstants.CONTENT_FEEDBACK).then((res) => {
+      this.populateComments(res);
+    }).catch(async (error) => {
+      await this.getDefaultContentRatingFormApi();
+    });
   }
 
   populateComments(data) {
@@ -249,7 +246,7 @@ export class ContentRatingAlertComponent {
     }
   }
 
-  generateContentRatingTelemetry(option) {
+  async generateContentRatingTelemetry(option) {
     const viewDismissData = {
       rating: this.ratingCount ? this.ratingCount : this.userRating,
       comment: this.allComments ? this.allComments : '',
@@ -257,15 +254,16 @@ export class ContentRatingAlertComponent {
     };
     this.contentService.sendFeedback(option).subscribe((res) => {
       viewDismissData.message = 'rating.success';
-      this.popOverCtrl.dismiss(viewDismissData);
+    }, (data) => {
+      viewDismissData.message = 'rating.error';
+    });
+    await this.popOverCtrl.dismiss(viewDismissData);
+    if(viewDismissData.message === 'rating.success') {
       this.commonUtilService.showToast('THANK_FOR_RATING', false, 'green-toast');
       if (this.navigateBack) {
         this.location.back();
       }
-    }, (data) => {
-      viewDismissData.message = 'rating.error';
-      this.popOverCtrl.dismiss(viewDismissData);
-    });
+    }
   }
 
   generateContentFeedbackTelemetry(option1) {

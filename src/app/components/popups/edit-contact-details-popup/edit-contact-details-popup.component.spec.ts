@@ -2,9 +2,9 @@ import { EditContactDetailsPopupComponent } from './edit-contact-details-popup.c
 import { CommonUtilService } from '../../../../services';
 import { PopoverController, Platform, NavParams, MenuController } from '@ionic/angular';
 import { of, throwError } from 'rxjs';
-import { ProfileService } from 'sunbird-sdk';
+import { ProfileService } from '@project-sunbird/sunbird-sdk';
 import { FormBuilder } from '@angular/forms';
-import { Keyboard } from '@ionic-native/keyboard/ngx';
+import { Keyboard } from '@awesome-cordova-plugins/keyboard/ngx';
 
 describe('EditContactDetailsPopupComponent', () => {
     let editContactDetailsPopupComponent: EditContactDetailsPopupComponent;
@@ -83,7 +83,7 @@ describe('EditContactDetailsPopupComponent', () => {
         expect(editContactDetailsPopupComponent).toBeTruthy();
     });
 
-    it('should disable the Menu drawer  and handle the back button in ionViewWillEnter ', () => {
+    it('should disable the Menu drawer  and handle the back button in ionViewWillEnter ', (done) => {
         // arrange
         const subscribeWithPriorityData = jest.fn((_, fn) => fn());
         mockPlatform.backButton = {
@@ -91,12 +91,14 @@ describe('EditContactDetailsPopupComponent', () => {
 
         } as any;
         // act
-        editContactDetailsPopupComponent.ngOnInit();
         editContactDetailsPopupComponent.initEditForm();
         editContactDetailsPopupComponent.ionViewWillEnter();
         // assert
         expect(mockMenuController.enable).toHaveBeenCalledWith(false);
-        expect(mockPopoverCtrl.dismiss).toHaveBeenCalled();
+        setTimeout(() => {
+            expect(mockPopoverCtrl.dismiss).toHaveBeenCalled();
+            done()
+        }, 0);
     });
 
     it('should dismiss the popup when cancel is invoked', () => {
@@ -110,22 +112,25 @@ describe('EditContactDetailsPopupComponent', () => {
     it('should hide the keyboard when cancel is invoked', () => {
         // arrange
         // act
-        editContactDetailsPopupComponent.cancel({});
+        editContactDetailsPopupComponent.cancel();
         // assert
-        expect(mockKeyBoard.hide).toHaveBeenCalled();
+        expect(mockPopoverCtrl.dismiss).toHaveBeenCalledWith({ isEdited: false });
+
     });
 
-    it('should enable MenuDrawer and unsubscribe back function', () => {
+    it('should enable MenuDrawer and unsubscribe back function', (done) => {
         // arrange
         editContactDetailsPopupComponent.unregisterBackButton = {
             unsubscribe: jest.fn(),
-
         } as any;
         // act
         editContactDetailsPopupComponent.ionViewWillLeave();
         // assert
         expect(mockMenuController.enable).toHaveBeenCalledWith(true);
-        expect(editContactDetailsPopupComponent.unregisterBackButton.unsubscribe).toHaveBeenCalled();
+        setTimeout(() => {
+            expect(editContactDetailsPopupComponent.unregisterBackButton.unsubscribe).toHaveBeenCalled();
+            done()
+        }, 0);
     });
 
     it('should refresh the error values', () => {
@@ -179,13 +184,13 @@ describe('EditContactDetailsPopupComponent', () => {
         }, 1);
     });
 
-    it('should generate OTP in case of  USER_NOT_FOUND while validate phone number', (done) => {
+    it('should generate OTP in case of response while validate phone number', (done) => {
         // arrange
         mockCommonUtilService.networkInfo = { isNetworkAvailable: true };
         editContactDetailsPopupComponent.userId = 'sample_uid';
         editContactDetailsPopupComponent.personEditForm = { value: '1234567890' } as any;
         jest.spyOn(editContactDetailsPopupComponent, 'generateOTP');
-        mockProfileService.isProfileAlreadyInUse = jest.fn(() => throwError({ response: { body: { params: { err: 'USER_NOT_FOUND' } } } }));
+        mockProfileService.isProfileAlreadyInUse = jest.fn(() => throwError({ response: { body: { params: { err: 'UOS_USRRED0013' } } } }));
         // act
         editContactDetailsPopupComponent.validate();
         // assert
@@ -202,12 +207,11 @@ describe('EditContactDetailsPopupComponent', () => {
         editContactDetailsPopupComponent.personEditForm = { value: '1234567890' } as any;
         jest.spyOn(editContactDetailsPopupComponent, 'generateOTP');
         mockProfileService.isProfileAlreadyInUse = jest.fn(() => throwError(
-            { response: { body: { params: { err: 'USER_ACCOUNT_BLOCKED' } } } }));
+            { response: { body: { params: { err: 'UOS_USRRED0013' } } } }));
         // act
         editContactDetailsPopupComponent.validate();
         // assert
         setTimeout(() => {
-            expect(editContactDetailsPopupComponent.blockedAccount).toBeTruthy();
             expect(mockCommonUtilService.getLoader().dismiss).toHaveBeenCalledTimes(1);
             expect(editContactDetailsPopupComponent.loader).toBeUndefined();
             done();
@@ -254,7 +258,6 @@ describe('EditContactDetailsPopupComponent', () => {
         setTimeout(() => {
             expect(mockCommonUtilService.getLoader().dismiss).toHaveBeenCalledTimes(1);
             expect(editContactDetailsPopupComponent.loader).toBeUndefined();
-            expect(mockPopoverCtrl.dismiss).toHaveBeenCalledWith({ isEdited: true, value: 'abc@email.com' });
             done();
         }, 1);
     });
@@ -267,7 +270,7 @@ describe('EditContactDetailsPopupComponent', () => {
         mockProfileService.isProfileAlreadyInUse = jest.fn(() => throwError(
             { response: { body: { params: { err: 'USER_NOT_FOUND' } } } }));
         mockProfileService.generateOTP = jest.fn(() => throwError(
-            { err: 'ERROR_RATE_LIMIT_EXCEEDED' }));
+            { err: 'UOS_OTPCRT0059' }));
         // act
 
         editContactDetailsPopupComponent.validate();

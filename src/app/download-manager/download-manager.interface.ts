@@ -1,6 +1,5 @@
-import { LoadingController } from '@ionic/angular';
-import { Content, Profile, ContentDelete } from 'sunbird-sdk';
 import { OnInit } from '@angular/core';
+import { Content, ContentDelete } from '@project-sunbird/sunbird-sdk';
 
 export interface AppStorageInfo {
     usedSpace: number;
@@ -12,17 +11,12 @@ export interface EmitedContents {
     selectedContents: ContentDelete[];
 }
 
-
 type SortAttribute = [keyof Content];
 
 export interface DownloadManagerPageInterface extends OnInit {
-    // downloadService: DownloadService;
-    // contentService: ContentService;
-    // eventBusService: EventBusService;
 
     storageInfo: AppStorageInfo;
     downloadedContents: Content[];
-    // migration-TODO
     // loader?: Loading
     loader?: any
 

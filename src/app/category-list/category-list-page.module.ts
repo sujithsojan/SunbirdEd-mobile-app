@@ -1,22 +1,23 @@
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { Routes, RouterModule } from '@angular/router';
+import {NgModule} from '@angular/core';
+import {CommonModule} from '@angular/common';
+import {FormsModule, ReactiveFormsModule} from '@angular/forms';
+import {Routes, RouterModule} from '@angular/router';
 
-import { IonicModule } from '@ionic/angular';
+import {IonicModule} from '@ionic/angular';
 
-import { CategoryListPage } from './category-list-page';
+import {CategoryListPage} from './category-list-page';
 import {CommonConsumptionModule} from '@project-sunbird/common-consumption';
 import {TranslateModule} from '@ngx-translate/core';
-import {ComponentsModule} from '@app/app/components/components.module';
-import {CommonFormElementsModule} from 'common-form-elements';
-import { PipesModule } from '@app/pipes/pipes.module';
+import {ComponentsModule} from '../../app/components/components.module';
+import {CommonFormElementsModule, SbSearchFilterModule} from 'common-form-elements';
+import {PipesModule} from '../../pipes/pipes.module';
+import {SearchFilterPage} from '../../app/search-filter/search-filter.page';
 
 const routes: Routes = [
-  {
-    path: '',
-    component: CategoryListPage
-  }
+    {
+        path: '',
+        component: CategoryListPage
+    }
 ];
 
 @NgModule({
@@ -29,8 +30,11 @@ const routes: Routes = [
         TranslateModule,
         ComponentsModule,
         CommonFormElementsModule,
-        PipesModule
+        PipesModule,
+        ReactiveFormsModule,
+        SbSearchFilterModule
     ],
-  declarations: [CategoryListPage]
+    declarations: [CategoryListPage, SearchFilterPage]
 })
-export class CategoryListPageModule {}
+export class CategoryListPageModule {
+}
