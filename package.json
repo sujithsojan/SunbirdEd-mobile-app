@@ -33,7 +33,7 @@
     "@ionic-native/app-version": "^5.15.1",
     "@ionic-native/core": "^5.15.1",
     "@ionic-native/device": "^5.15.1",
-    "@ionic-native/file": "^5.15.1",
+    "@ionic-native/file": "^5.36.0",
     "@ionic-native/file-opener": "^5.15.1",
     "@ionic-native/file-transfer": "^5.15.1",
     "@ionic-native/ionic-webview": "^5.15.1",
